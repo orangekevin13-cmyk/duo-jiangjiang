@@ -58,6 +58,31 @@ async function call(name, args, session) {
   return { name, args, result, schema };
 }
 
+/**
+ * Build the "任務地圖" payload from a find_nearby_mission_spots result.
+ * Exported so the live agent path and the offline engine emit byte-identical shapes —
+ * if these two ever drift, the on-stage fallback stops matching the real thing.
+ */
+export function buildSpotsPanel(toolResult, recommendedId, missionTitle = '') {
+  const spots = toolResult?.spots || [];
+  const origin = toolResult?.origin || null;
+  const rec = spots.find((s) => s.merchant_id === recommendedId) || spots[0] || null;
+  return {
+    origin,
+    origin_label: toolResult?.origin_label || '你目前位置',
+    // Every spot gets an explicit flag so the UI never has to guess which one is the mission.
+    spots: spots.map((s) => ({ ...s, recommended: s.merchant_id === recommendedId })),
+    recommended_id: recommendedId,
+    recommended_name: rec?.name || '',
+    recommended_distance_m: rec?.distance_m ?? null,
+    recommended_walk_minutes: rec?.walk_minutes ?? null,
+    mission_title: missionTitle,
+    friendly_spots_only: true,
+    sign_text: '歡迎學講廣東話！講錯唔緊要，我哋慢慢聽。',
+    duo_line: 'Three Friendly Spots nearby. One mission. Pick the closest.',
+  };
+}
+
 /* ---------------------------------- 1 ---------------------------------- */
 async function mockLessonComplete(input, session) {
   const events = [];
@@ -96,12 +121,25 @@ async function mockLessonComplete(input, session) {
   session.activeMission = mission;
   session.missions = [...(session.missions || []), mission];
 
+  // 任務地圖（Step 2 · REVEAL）：唔止用文字講「280m 外有個任務」，而係真係畫出嚟，
+  // 令學員一眼睇到「附近邊度可以講粵語」。
+  const spotsPanel = buildSpotsPanel(near.result, merchant.id, mission.title);
+  session.nearby = spotsPanel;
+
   events.push({ type: 'plan', plan: ['搵附近嘅 SpeakOut Friendly Spot', '生成線下任務卡（SpeakOut Mission）'] });
   events.push({ type: 'narration', text: NARRATION['lesson-complete'].replace('{lesson}', lesson.titleZh || lesson.title) });
   for (const t of tokensFor('lesson-complete', {})) events.push({ type: 'token', text: t });
+  // 次序有意義：先出地圖（任務喺邊），再出任務卡（要做咩）。前端會依序渲染。
+  events.push({ type: 'panel', panel: { type: 'spots', data: spotsPanel } });
   events.push({ type: 'panel', panel: { type: 'mission', data: mission } });
 
-  return { events, panel: { type: 'mission', data: mission }, toolTrace: [near, card], plan: ['搵附近 Friendly Spot', '生成任務卡'] };
+  return {
+    events,
+    panel: { type: 'mission', data: mission },
+    spotsPanel,
+    toolTrace: [near, card],
+    plan: ['搵附近 Friendly Spot', '生成任務卡'],
+  };
 }
 
 /* ---------------------------------- 2 ---------------------------------- */

@@ -19,7 +19,7 @@ import {
   pickMerchantForLesson,
   walkMinutes,
 } from './store.mjs';
-import { buildMockScenario } from './mock.mjs';
+import { buildMockScenario, buildSpotsPanel } from './mock.mjs';
 
 const SYSTEM_BASE = `你是 "Duo 講講"（Cantonese SpeakOut Pass）嘅線下任務智能體（Agent）。
 
@@ -358,11 +358,19 @@ async function scenarioLessonComplete(input, { client, session, send }) {
   requireTools(toolTrace, ['find_nearby_mission_spots', 'create_speakout_mission']);
   const mission = normalizeMission(data, merchant, lesson);
   const plan = planFromTrace(toolTrace, ['生成任務卡']);
+
+  // 任務地圖：直接由真實工具結果砌出嚟，唔經模型改寫 —— 距離同座標一定要同 verify_location 一致。
+  const spotsRaw = toolTrace.filter((t) => t.name === 'find_nearby_mission_spots').pop()?.result;
+  const spotsPanel = buildSpotsPanel(spotsRaw, merchant.id, mission.title);
+  session.nearby = spotsPanel;
+
+  send({ type: 'panel', panel: { type: 'spots', data: spotsPanel } });
   send({ type: 'panel', panel: { type: 'mission', data: mission } });
   session.missions = [...(session.missions || []), mission];
   session.activeMission = mission;
   return {
     panel: { type: 'mission', data: mission },
+    spotsPanel,
     mode: 'live',
     toolTrace,
     usage,

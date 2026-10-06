@@ -834,6 +834,69 @@ h1, h2, h3, h4 {
 .path-node.on::after { background: var(--duo-green-pale); }
 
 /* ==========================================================================
+   8b. 任務地圖（Step 2 · REVEAL）—— Duolingo 學習路徑嘅空間版
+   ========================================================================== */
+/* 彈出動畫：地圖「彈」出嚟，配合 Duolingo 嘅 back-out 彈性 */
+.s-card.map-pop {
+  animation: mapPop 520ms var(--duo-spring);
+  border-left: 6px solid var(--duo-green);
+}
+@keyframes mapPop {
+  0% { opacity: 0; transform: scale(0.94) translateY(10px); }
+  60% { opacity: 1; transform: scale(1.015) translateY(0); }
+  100% { transform: scale(1); }
+}
+.s-mapbox.mission-map svg { display: block; width: 100%; height: auto; }
+
+/* 推薦地點嘅呼吸光環 */
+.spot-marker.rec .ping {
+  animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  transform-origin: center;
+}
+@keyframes ping {
+  0% { opacity: 0.75; transform: scale(0.7); }
+  70% { opacity: 0; transform: scale(1.6); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+
+.map-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 9px 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--duo-wolf);
+}
+.map-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.map-legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.map-legend .dot.you { background: var(--duo-orange); }
+.map-legend .dot.rec { background: var(--duo-green); }
+.map-legend .dot.other { background: var(--duo-hare); }
+
+/* 附近其他地點列表 */
+.spot-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 2px solid var(--duo-snow);
+}
+.spot-row:last-child { border-bottom: none; }
+.spot-row .spot-icon {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--duo-snow);
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+}
+.spot-row b { display: block; font-size: 12.5px; font-weight: 800; color: var(--duo-black); }
+.spot-row span:not(.spot-icon) { font-size: 11px; font-weight: 700; color: var(--duo-wolf); }
+
+/* ==========================================================================
    9. 排行榜 / Friend Mission
    ========================================================================== */
 .league-table { display: flex; flex-direction: column; gap: 5px; }

@@ -57,6 +57,9 @@ const state = {
   autoplay: false,
   toolCalls: 0,
   lastCode: null,
+  // 任務地圖同任務卡係同一次 lesson-complete 出嘅兩個視圖，要留住俾用戶來回睇
+  nearbySpots: null,
+  missionPanel: null,
 };
 
 /* ---------------------------------------------------------------- *
@@ -197,6 +200,7 @@ async function runScenario(name, input = {}) {
 /** panel.type → step。Keep this map in sync with the 6 scenarios. */
 function stepForPanel(panel) {
   if (!panel) return 'idle';
+  if (panel.type === 'spots') return 'spots'; // 任務地圖：任務喺邊（Step 2 嘅前半）
   if (panel.type === 'mission') return 'mission';
   if (panel.type === 'rehearsal') return 'prerun';
   if (panel.type === 'arrival') return 'arrival';
@@ -209,6 +213,11 @@ function stepForPanel(panel) {
 function applyPanel(panel) {
   state.panel = panel;
   state.step = stepForPanel(panel);
+
+  // 任務地圖同任務卡係同一次 lesson-complete 出嘅兩個視圖，兩邊都要留住，
+  // 令學員可以喺地圖與任務卡之間來回睇。
+  if (panel.type === 'spots') state.nearbySpots = panel.data;
+  if (panel.type === 'mission') state.missionPanel = panel.data;
 
   if (panel.type === 'mission') loadGeo(panel.data.location.merchant_id);
   if (panel.type === 'arrival') {
@@ -330,6 +339,56 @@ function renderScreenBase() {
         <div class="s-note" style="padding:0;text-align:left">
           撳下面嘅按鈕模擬「課程完成」事件，睇吓 Agent 點樣把你啱啱學嘅粵語變成一個香港真實任務。
         </div>
+      </div>`;
+    return;
+  }
+
+  /* ---------- Step 2a · 任務地圖（You're ready to use this outside Duolingo） ---------- */
+  if (p.type === 'spots') {
+    const s = p.data;
+    const others = (s.spots || []).filter((x) => !x.recommended);
+    screen.innerHTML = `
+      <div class="s-card lesson">
+        <div class="duo-line">${owlSvg(46, 'wave')}<div class="bubble">You’re ready to use this outside Duolingo.</div></div>
+        <div class="s-tag green">📍 One SpeakOut Mission available ${s.recommended_distance_m ?? '—'}m away</div>
+        <h3>${esc(s.mission_title || '附近有一個任務')}</h3>
+        <p class="s-sub">${esc(s.origin_label || '你目前位置')} 附近有 ${(s.spots || []).length} 個 Friendly Spot</p>
+      </div>
+
+      <div class="s-card map-pop">
+        <div class="s-block" style="margin-bottom:6px"><b>任務地圖 · Mission Map</b></div>
+        <div class="s-mapbox mission-map">${spotsMapSvg(s)}</div>
+        <div class="map-legend">
+          <span><i class="dot you"></i>你</span>
+          <span><i class="dot rec"></i>任務地點</span>
+          <span><i class="dot other"></i>其他 Friendly Spot</span>
+        </div>
+        <div class="map-entry">
+          🎯 <b>${esc(s.recommended_name || '')}</b> · 步行 ${s.recommended_walk_minutes ?? '—'} 分鐘（${s.recommended_distance_m ?? '—'}m）
+        </div>
+      </div>
+
+      ${
+        others.length
+          ? `<div class="s-card">
+               <div class="s-block" style="margin-bottom:6px"><b>附近仲有</b></div>
+               ${others
+                 .map(
+                   (o) => `<div class="spot-row">
+                     <span class="spot-icon">${spotIcon(o.category)}</span>
+                     <div><b>${esc(o.name)}</b><span>${esc(o.district || '')} · 步行 ${o.walk_minutes} 分鐘（${o.distance_m}m）</span></div>
+                   </div>`,
+                 )
+                 .join('')}
+             </div>`
+          : ''
+      }
+
+      <div class="s-card">
+        <div class="s-block" style="margin-bottom:6px"><b>Friendly Spot 承諾</b>
+          <p><b>${esc(s.sign_text || '歡迎學講廣東話！講錯唔緊要，我哋慢慢聽。')}</b></p>
+        </div>
+        <div class="s-note" style="padding:0;text-align:left">呢啲店員願意聽初學者講粵語，唔會轉台講普通話。任務只要求「嘗試過」。</div>
       </div>`;
     return;
   }
@@ -581,6 +640,8 @@ function renderAction() {
   const spinner = state.busy ? '<i class="spin"></i>' : '';
   const map = {
     idle: { label: '完成 Lesson 01 · 點嘢飲', fn: 'start' },
+    // 任務地圖先出現（任務喺邊），撳一下才睇任務卡（要做咩）
+    spots: { label: '睇任務卡 · See Mission', fn: 'seeMission' },
     mission: { label: '我出發喇 · 開始預演', fn: 'prerun' },
     prerun: { label: '我到咗 · 驗證位置', fn: 'arrive' },
     arrival: state.panel?.data?.code
@@ -591,14 +652,35 @@ function renderAction() {
     share: { label: '換一版分享文案', fn: 'share' },
   };
   const action = map[state.step] || map.idle;
-  bar.innerHTML = `<button class="btn primary" id="mainAction" data-fn="${action.fn}" ${disabled}>${spinner}${action.label}</button>`;
+  // 任務卡頁加一個「返回地圖」嘅次要按鈕，令兩個視圖可以來回睇
+  const back =
+    state.step === 'mission' && state.nearbySpots
+      ? '<button class="btn ghost wide" id="backToMap">← 返回任務地圖</button>'
+      : '';
+  bar.innerHTML =
+    `<button class="btn primary" id="mainAction" data-fn="${action.fn}" ${disabled}>${spinner}${action.label}</button>` + back;
   $('mainAction').addEventListener('click', onMainAction);
+  const backBtn = $('backToMap');
+  if (backBtn)
+    backBtn.addEventListener('click', () => {
+      state.panel = { type: 'spots', data: state.nearbySpots };
+      state.step = 'spots';
+      renderScreen();
+      renderAction();
+    });
 }
 
 async function onMainAction() {
   if (state.busy) return;
   const fn = $('mainAction').dataset.fn;
   if (fn === 'start') return runScenario('lesson-complete', { lessonId: 'L-01' });
+  if (fn === 'seeMission') {
+    state.panel = { type: 'mission', data: state.missionPanel };
+    state.step = 'mission';
+    renderScreen();
+    renderAction();
+    return;
+  }
   if (fn === 'prerun') return runScenario('prerun', {});
   if (fn === 'arrive') return runScenario('arrive', gpsInput());
   if (fn === 'verify') {
@@ -868,6 +950,169 @@ function updateChrome() {
 function renderSide() {
   updateChrome();
   renderMap();
+}
+
+/** 任務地圖上每類門店嘅圖示 */
+function spotIcon(category) {
+  if (category === 'cafe') return '☕';
+  if (category === 'restaurant') return '🍜';
+  if (category === 'convenience') return '💳';
+  if (category === 'bookstore') return '📚';
+  if (category === 'campus') return '🎓';
+  return '📍';
+}
+
+/**
+ * 任務地圖：學員位置 + 附近所有 Friendly Spot，推薦嗰間高亮。
+ * 用真實經緯度畫，比例忠實 —— 唔係裝飾圖，距離感同 verify_location 一致。
+ */
+function spotsMapSvg(s, w = 390, h = 260) {
+  const spots = s.spots || [];
+  const origin = s.origin;
+  if (!origin || !spots.length) {
+    return `<svg viewBox="0 0 ${w} ${h}"><text x="${w / 2}" y="${h / 2}" text-anchor="middle" fill="${DUO.hare}" font-size="12">暫無附近地點資料</text></svg>`;
+  }
+  const latScale = 111320;
+  const lngScale = 111320 * Math.cos((origin.lat * Math.PI) / 180);
+
+  // 換算成以學員為原點嘅米座標
+  const raw = spots.map((sp) => ({
+    sp,
+    mx: (sp.lng ?? origin.lng) - origin.lng,
+    my: (sp.lat ?? origin.lat) - origin.lat,
+  }));
+
+  // 後端只回距離，未必回座標；用距離＋方位無從得知，所以若缺座標就改用「距離條」畫法
+  const hasCoords = raw.every((r) => Number.isFinite(r.mx) && Number.isFinite(r.my) && (r.mx !== 0 || r.my !== 0));
+
+  if (!hasCoords) {
+    // 退化畫法：同心圓 + 沿環擺放（按距離排序），一樣睇得出「邊間最近」
+    const maxD = Math.max(...spots.map((sp) => sp.distance_m || 1), 120);
+    const cx = w / 2;
+    const cy = h / 2 + 14;
+    const maxR = Math.min(w, h) / 2 - 30;
+    const sorted = [...spots].sort((a, b) => (a.distance_m || 0) - (b.distance_m || 0));
+    const rings = [0.33, 0.66, 1].map((f) =>
+      `<circle cx="${cx}" cy="${cy}" r="${(maxR * f).toFixed(1)}" fill="none" stroke="${DUO.swan}" stroke-width="1.5" stroke-dasharray="4 4"/>`,
+    );
+    const label = `<text x="${cx}" y="${cy + 5}" text-anchor="middle" font-size="11" font-weight="800" fill="${DUO.orangeDeep || '#cc7a00'}">你</text>`;
+    const dots = sorted
+      .map((sp, i) => {
+        const ang = (-90 + (360 / Math.max(sorted.length, 1)) * i) * (Math.PI / 180);
+        const r = (sp.distance_m / maxD) * maxR;
+        const px = cx + Math.cos(ang) * r;
+        const py = cy + Math.sin(ang) * r;
+        return spotMarker(px, py, sp, sp.recommended, elidedName(sp.name));
+      })
+      .join('');
+    return `<svg viewBox="0 0 ${w} ${h}">
+      <rect x="0" y="0" width="${w}" height="${h}" fill="${DUO.snow}" rx="12"/>
+      ${rings.join('')}
+      <circle cx="${cx}" cy="${cy}" r="7" fill="${DUO.orange}" stroke="#fff" stroke-width="2.5"/>
+      ${label}${dots}
+      <text x="${cx}" y="${h - 6}" text-anchor="middle" font-size="10" font-weight="700" fill="${DUO.hare}">圈 = 距離刻度 · 外圈約 ${Math.round(maxD)}m</text>
+    </svg>`;
+  }
+
+  // 正常畫法：真實相對座標
+  const xs = raw.map((r) => r.mx * lngScale);
+  const ys = raw.map((r) => r.my * latScale);
+  const minX = Math.min(0, ...xs);
+  const maxX = Math.max(0, ...xs);
+  const minY = Math.min(0, ...ys);
+  const maxY = Math.max(0, ...ys);
+  const spanX = Math.max(maxX - minX, 80);
+  const spanY = Math.max(maxY - minY, 80);
+  const pad = 42;
+  const scale = Math.min((w - pad * 2) / spanX, (h - pad * 2) / spanY);
+  const toPx = (mx, my) => ({
+    px: pad + (mx * lngScale - minX) * scale,
+    py: h - pad - (my * latScale - minY) * scale, // 北在上：y 軸反轉
+  });
+  const me = toPx(0, 0);
+  // 兩個地點捱得太近時，標籤會疊住睇唔清。呢度做一次輕量去重疊：
+  // 只把捱得太近嘅點沿住原本方向輕輕推開，唔會大改地理位置。
+  const points = raw.map((r) => {
+    const { px, py } = toPx(r.mx, r.my);
+    return { px, py, sp: r.sp };
+  });
+  separateMarkers(points, w, h, pad);
+
+  const dots = points
+    .map((pt) => spotMarker(pt.px, pt.py, pt.sp, pt.sp.recommended, elidedName(pt.sp.name)))
+    .join('');
+  return `<svg viewBox="0 0 ${w} ${h}">
+    <rect x="0" y="0" width="${w}" height="${h}" fill="${DUO.snow}" rx="12"/>
+    <g stroke="${DUO.swan}" stroke-width="1">
+      ${Array.from({ length: 5 }, (_, i) => `<line x1="0" y1="${((i + 1) * h) / 6}" x2="${w}" y2="${((i + 1) * h) / 6}"/>`).join('')}
+      ${Array.from({ length: 6 }, (_, i) => `<line x1="${((i + 1) * w) / 7}" y1="0" x2="${((i + 1) * w) / 7}" y2="${h}"/>`).join('')}
+    </g>
+    <text x="${w - 8}" y="16" text-anchor="end" font-size="10" font-weight="800" fill="${DUO.hare}">N ↑</text>
+    <circle cx="${me.px}" cy="${me.py}" r="7" fill="${DUO.orange}" stroke="#fff" stroke-width="2.5"/>
+    <text x="${me.px}" y="${me.py + 22}" text-anchor="middle" font-size="11" font-weight="800" fill="${DUO.orangeDeep || '#cc7a00'}">你</text>
+    ${dots}
+    <text x="8" y="${h - 6}" font-size="10" font-weight="700" fill="${DUO.hare}">比例忠實 · 網格約 ${Math.round((spanX / 6) / 10) * 10}m</text>
+  </svg>`;
+}
+
+/**
+ * 標籤去重疊：如果兩個標記捱得太近（連標籤一齊計），就沿住兩點連線方向推開。
+ * 只推最少嘅距離，最多迭代幾次，並且唔會推出畫布以外。
+ */
+function separateMarkers(points, w, h, pad) {
+  const MIN_GAP = 64; // 標籤闊度連距離文字
+  for (let iter = 0; iter < 24; iter += 1) {
+    let moved = false;
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        const a = points[i];
+        const b = points[j];
+        let dx = b.px - a.px;
+        let dy = b.py - a.py;
+        let d = Math.hypot(dx, dy);
+        if (d >= MIN_GAP) continue;
+        // 兩點完全重合嘅話，俾一個確定性嘅方向，唔用隨機（每次重播都一樣）
+        if (d < 0.01) {
+          dx = 1;
+          dy = 0;
+          d = 1;
+        }
+        const push = (MIN_GAP - d) / 2;
+        const ux = (dx / d) * push;
+        const uy = (dy / d) * push;
+        a.px -= ux;
+        a.py -= uy;
+        b.px += ux;
+        b.py += uy;
+        moved = true;
+      }
+    }
+    // 夾返入畫布
+    for (const p of points) {
+      p.px = Math.max(pad - 22, Math.min(w - pad + 22, p.px));
+      p.py = Math.max(pad - 10, Math.min(h - 26, p.py));
+    }
+    if (!moved) break;
+  }
+}
+
+function elidedName(name) {
+  const n = String(name || '');
+  return n.length > 9 ? `${n.slice(0, 9)}…` : n;
+}
+
+function spotMarker(px, py, spot, recommended, label) {
+  const c = recommended ? DUO.green : DUO.hare;
+  const edge = recommended ? DUO.greenDeep : '#c9c9c9';
+  return `
+    <g class="spot-marker ${recommended ? 'rec' : ''}">
+      ${recommended ? `<circle cx="${px}" cy="${py}" r="18" fill="none" stroke="${DUO.green}" stroke-width="2.5" class="ping"/>` : ''}
+      <line x1="${px}" y1="${py}" x2="${px}" y2="${py - 16}" stroke="${edge}" stroke-width="2"/>
+      <circle cx="${px}" cy="${py - 20}" r="${recommended ? 11 : 8}" fill="${c}" stroke="#fff" stroke-width="2.5"/>
+      <text x="${px}" y="${py - 16}" text-anchor="middle" font-size="${recommended ? 11 : 9}" dominant-baseline="middle">${spotIcon(spot.category)}</text>
+      <text x="${px}" y="${py + 14}" text-anchor="middle" font-size="${recommended ? 10.5 : 9}" font-weight="800" fill="${recommended ? DUO.greenDeep : DUO.wolf}">${label}</text>
+      <text x="${px}" y="${py + 25}" text-anchor="middle" font-size="9" font-weight="700" fill="${DUO.hare}">${spot.distance_m}m · ${spot.walk_minutes}分鐘</text>
+    </g>`;
 }
 
 function mapSvg(claimed, merchant, radius, w = 420, h = 250) {
@@ -1144,7 +1389,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 function paintFlow() {
-  const order = { idle: 0, mission: 1, prerun: 2, arrival: 3, verify: 4, reward: 5, share: 6 };
+  // spots（任務地圖）同 mission（任務卡）同屬 Step 2，所以流程條都係第 2 格
+  const order = { idle: 0, spots: 2, mission: 2, prerun: 3, arrival: 4, verify: 4, reward: 5, share: 6 };
   const n = order[state.step] ?? 0;
   [...$('flow').children].forEach((li) => {
     const i = Number(li.dataset.step);

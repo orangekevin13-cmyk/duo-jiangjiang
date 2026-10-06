@@ -275,6 +275,10 @@ export async function runTool(name, input, ctx = {}) {
           address: merchant.address,
           distance_m: d,
           walk_minutes: walkMinutes(d),
+          // Coordinates are included so the mission map can be drawn to true scale.
+          // The distance above stays authoritative (computed here); the map is presentation only.
+          lat: merchant.lat,
+          lng: merchant.lng,
           staff_language: merchant.staffLang,
           staff_note: merchant.staffNote,
           features: merchant.features,

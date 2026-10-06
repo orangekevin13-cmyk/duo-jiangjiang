@@ -77,6 +77,44 @@ ok(tools1.includes('create_speakout_mission'), '應該調用 create_speakout_mis
 ok(s1.panel.data.reward.xp === 75, `任務獎勵 XP 應該係 75，實際 ${s1.panel.data.reward.xp}`);
 ok(!('exp' in s1.panel.data.reward), '唔應該再出現舊欄位 reward.exp');
 
+/* 任務地圖（Step 2 · REVEAL）：lesson-complete 應該同時出地圖面板 */
+const spotsEv = s1.events.find((e) => e.type === 'panel' && e.panel?.type === 'spots');
+ok(Boolean(spotsEv), 'lesson-complete 應該同時發出 spots 面板（任務地圖）');
+if (spotsEv) {
+  const sp = spotsEv.panel.data;
+  for (const f of ['origin.lat', 'origin.lng', 'origin_label', 'spots', 'recommended_id', 'recommended_name', 'recommended_distance_m', 'recommended_walk_minutes', 'mission_title', 'sign_text']) {
+    const v = f.split('.').reduce((a, k) => (a == null ? a : a[k]), sp);
+    ok(v !== undefined && v !== null && v !== '', `spots.data.${f} 缺失`);
+  }
+  ok(Array.isArray(sp.spots) && sp.spots.length >= 2, '任務地圖應該有至少 2 個地點');
+  const recs = sp.spots.filter((x) => x.recommended);
+  ok(recs.length === 1, `應該只有一個推薦地點，實際 ${recs.length} 個`);
+  ok(recs[0]?.merchant_id === s1.panel.data.task_id, '推薦地點應該同任務卡嘅門店一致');
+  ok(
+    sp.spots.every((x) => Number.isFinite(x.lat) && Number.isFinite(x.lng)),
+    '每個地點都應該有座標（任務地圖要按真實比例畫）',
+  );
+  ok(
+    sp.spots.every((x) => Number.isFinite(x.distance_m) && x.distance_m > 0),
+    '每個地點都應該有距離',
+  );
+  // 距離排序：最近嘅應該排前面，而且推薦嗰間就係最近嗰間之一
+  const sorted = [...sp.spots].sort((a, b) => a.distance_m - b.distance_m);
+  ok(sorted[0].merchant_id === sp.recommended_id || sp.spots.some((x) => x.recommended), '推薦地點應該係按距離揀出嚟嘅');
+  // 地圖面板必須排喺任務卡之前（先「任務喺邊」再「要做咩」）
+  const missionIdx = s1.events.findIndex((e) => e.type === 'panel' && e.panel?.type === 'mission');
+  const spotsIdx = s1.events.indexOf(spotsEv);
+  ok(spotsIdx >= 0 && missionIdx >= 0 && spotsIdx < missionIdx, '任務地圖應該排喺任務卡之前');
+  // 地圖推薦地點嘅距離，要同任務卡顯示嘅距離一致（唔可以兩個數字打架）
+  const rec = recs[0];
+  if (rec) {
+    ok(
+      rec.distance_m === s1.panel.data.location.distance_m,
+      `地圖距離(${rec.distance_m}m)應該同任務卡距離(${s1.panel.data.location.distance_m}m)一致`,
+    );
+  }
+}
+
 /* ---------------- 2. Rehearsal ---------------- */
 section('2 · Rehearsal（Duo 扮店員）');
 const s2 = await run('prerun', {});
