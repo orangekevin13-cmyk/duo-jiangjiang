@@ -1,0 +1,1173 @@
+/* ==========================================================================
+   Duo 講講 · Duolingo 品牌視覺系統
+   —— 呢個檔案係整個演示嘅視覺基礎。每一個 component 都要問一句：
+      「睇落似唔似 Duolingo？」似唔到就改到似為止。
+
+   核心視覺語言（唔可以偏離）：
+   1. Owl Green #58CC02 係主色，佔版面 30% 以上
+   2. 每個可按嘅元素都有一條 4px 深色「立體底座」border-bottom，撳落去會壓低
+   3. 2–3px 實色邊框，唔用細到睇唔到嘅 hairline
+   4. 字重一律 700–800，圓潤字體；按鈕文字大寫 + 字距
+   5. 深度用實色底座（0 2px 0），唔用模糊陰影
+   ========================================================================== */
+
+:root {
+  /* Primary —— Owl Green */
+  --duo-green: #58cc02;
+  --duo-green-deep: #58a700;
+  --duo-green-light: #89e219;
+  --duo-green-pale: #dbf8c5;
+  --duo-green-tint: #f0fbe4;
+
+  /* Secondary accents */
+  --duo-orange: #ff9600;      /* streak 火焰 */
+  --duo-orange-deep: #cc7a00;
+  --duo-gem: #ce82ff;         /* 寶石 */
+  --duo-gem-deep: #a568cc;
+  --duo-blue: #1cb0f6;        /* 提示 / info */
+  --duo-blue-deep: #1899d6;
+  --duo-blue-pale: #ddf4ff;
+  --duo-red: #ff4b4b;         /* 錯誤 / 心心 */
+  --duo-red-deep: #cc3b3b;
+  --duo-gold: #ffc800;        /* 成就 / 徽章 */
+
+  /* Surface & ink */
+  --duo-white: #ffffff;
+  --duo-snow: #f7f7f7;
+  --duo-swan: #e5e5e5;
+  --duo-swan-deep: #d7d7d7;
+  --duo-hare: #afafaf;
+  --duo-wolf: #777777;
+  --duo-ink: #3c3c3c;
+  --duo-black: #131f23;
+
+  /* Shape & type */
+  --duo-radius: 16px;
+  --duo-radius-sm: 12px;
+  --duo-font: 'din-round', 'Feather Bold', 'DIN Round Pro', 'Nunito', 'Varela Round',
+    'Hiragino Maru Gothic ProN', 'Microsoft JhengHei UI', 'PingFang HK', 'Noto Sans HK',
+    system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --duo-mono: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+  --duo-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Legacy alias so nothing silently falls back to an unstyled look */
+  --line: var(--duo-swan);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--duo-snow);
+  color: var(--duo-ink);
+  font-family: var(--duo-font);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-weight: 800;
+  letter-spacing: -0.005em;
+  margin: 0;
+  color: var(--duo-black);
+}
+
+/* ==========================================================================
+   1. 頂部導覽列
+   ========================================================================== */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 20px;
+  background: var(--duo-green);
+  border-bottom: 4px solid var(--duo-green-deep);
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  flex-wrap: wrap;
+}
+
+.brand { display: flex; align-items: center; gap: 10px; min-width: 260px; }
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  border-radius: 50%;
+  border-bottom: 3px solid rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  flex: none;
+}
+.brand-mark svg { width: 34px; height: 34px; display: block; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+.brand-text strong { font-size: 20px; font-weight: 800; letter-spacing: 0.01em; }
+.brand-text span { font-size: 11px; opacity: 0.92; font-weight: 700; }
+
+/* 流程指示：Duolingo 學習路徑風格嘅圓點 */
+.flow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  flex-wrap: wrap;
+}
+.flow li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 5px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.14);
+  transition: background 180ms, transform 320ms var(--duo-spring);
+  white-space: nowrap;
+}
+.flow li i {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+}
+.flow li.done { background: rgba(255, 255, 255, 0.28); color: #fff; }
+.flow li.done i { background: #fff; color: var(--duo-green-deep); }
+.flow li.current {
+  background: #fff;
+  color: var(--duo-green-deep);
+  transform: translateY(-1px) scale(1.04);
+}
+.flow li.current i { background: var(--duo-green); color: #fff; }
+
+.controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ==========================================================================
+   2. 按鈕 — Duolingo 立體底座
+   ========================================================================== */
+.btn {
+  font-family: var(--duo-font);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 11px 18px;
+  border-radius: var(--duo-radius);
+  border: none;
+  cursor: pointer;
+  transition: filter 120ms, transform 100ms, background 120ms;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn.primary {
+  background: var(--duo-green);
+  color: #fff;
+  border-bottom: 4px solid var(--duo-green-deep);
+  font-size: 15px;
+  padding: 14px 24px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.btn.primary:hover { background: var(--duo-green-light); }
+.btn.primary:active { transform: translateY(4px); border-bottom-width: 0; padding-bottom: 18px; }
+.btn.primary:disabled {
+  background: var(--duo-swan);
+  color: var(--duo-hare);
+  border-bottom-color: var(--duo-swan-deep);
+  cursor: default;
+  transform: none;
+}
+
+.btn.ghost {
+  background: #fff;
+  color: var(--duo-wolf);
+  border: 2px solid var(--duo-swan);
+  border-bottom: 4px solid var(--duo-swan);
+}
+.btn.ghost:hover { color: var(--duo-ink); border-color: var(--duo-hare); border-bottom-color: var(--duo-hare); }
+.btn.ghost:active { transform: translateY(3px); border-bottom-width: 2px; }
+
+.btn.wide { width: 100%; margin-top: 10px; }
+.btn.blue {
+  background: var(--duo-blue);
+  color: #fff;
+  border-bottom: 4px solid var(--duo-blue-deep);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.btn.orange {
+  background: var(--duo-orange);
+  color: #fff;
+  border-bottom: 4px solid var(--duo-orange-deep);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.btn.orange:active { transform: translateY(4px); border-bottom-width: 0; }
+
+/* 分段控件 */
+.seg {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: var(--duo-radius-sm);
+  padding: 3px;
+  gap: 2px;
+}
+.seg button {
+  font-family: var(--duo-font);
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 6px 11px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: background 140ms;
+}
+.seg button:hover { background: rgba(255, 255, 255, 0.2); }
+.seg button.active { background: #fff; color: var(--duo-green-deep); }
+
+.spin {
+  width: 13px;
+  height: 13px;
+  border: 2.5px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+  display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ==========================================================================
+   3. 版面
+   ========================================================================== */
+.stage {
+  display: grid;
+  grid-template-columns: 420px minmax(360px, 1fr) 344px;
+  gap: 18px;
+  padding: 18px;
+  align-items: start;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+@media (max-width: 1300px) {
+  .stage { grid-template-columns: 400px 1fr; }
+  .side {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 14px;
+  }
+}
+@media (max-width: 900px) {
+  .stage { grid-template-columns: 1fr; }
+  .side { grid-template-columns: 1fr; }
+}
+
+/* ==========================================================================
+   4. 手機外框
+   ========================================================================== */
+.phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.phone {
+  width: 400px;
+  max-width: 100%;
+  background: #fff;
+  border: 3px solid var(--duo-swan);
+  border-bottom-width: 8px;
+  border-radius: 38px;
+  padding: 10px 10px 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 720px;
+  box-shadow: 0 2px 0 var(--duo-swan-deep);
+}
+.phone-notch {
+  width: 116px;
+  height: 5px;
+  background: var(--duo-swan);
+  border-radius: 9999px;
+  margin: 2px auto 6px;
+}
+.statusbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--duo-wolf);
+}
+.status-right { display: flex; align-items: center; gap: 5px; }
+.status-right i { display: inline-block; background: var(--duo-wolf); border-radius: 2px; }
+.status-right .sig { width: 12px; height: 9px; clip-path: polygon(0 100%, 100% 0, 100% 100%); }
+.status-right .wifi { width: 11px; height: 9px; border-radius: 50% 50% 0 0; }
+.status-right .batt { width: auto; height: auto; background: none; font-style: normal; font-size: 10px; }
+
+/* App 頂欄：課程 + streak / gems / hearts */
+.app-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px 6px;
+}
+.app-course { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.app-course .flag { font-size: 17px; line-height: 1; }
+.app-course strong { font-size: 15px; font-weight: 800; color: var(--duo-black); }
+.app-course .unit {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--duo-wolf);
+  background: var(--duo-snow);
+  border-radius: 9999px;
+  padding: 2px 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 118px;
+}
+.app-stats { display: flex; align-items: center; gap: 4px; flex: none; }
+.app-stats .stat {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 7px;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+.stat.streak { color: var(--duo-orange-deep); background: #fff5e6; }
+.stat.gems { color: #8b4fc4; background: #f7efff; }
+.stat.hearts { color: var(--duo-red); background: #ffeeee; }
+.stat.pop { animation: statPop 620ms var(--duo-spring); }
+@keyframes statPop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.32); }
+  100% { transform: scale(1); }
+}
+
+/* 每日目標進度條 */
+.goalbar {
+  position: relative;
+  height: 20px;
+  background: var(--duo-swan);
+  border-radius: 9999px;
+  margin: 0 6px 10px;
+  overflow: hidden;
+}
+.goalbar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--duo-green), var(--duo-green-light));
+  border-radius: 9999px;
+  transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.goalbar span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--duo-black);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* 手機內文（可滾動） */
+.screen {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px 6px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scrollbar-width: thin;
+}
+.screen::-webkit-scrollbar { width: 7px; }
+.screen::-webkit-scrollbar-thumb { background: var(--duo-swan); border-radius: 9999px; }
+
+.actionbar { padding: 8px 6px 6px; }
+.actionbar .btn { width: 100%; }
+
+/* 底部 Tab（Duolingo 底部導覽） */
+.tabbar {
+  display: flex;
+  border-top: 2px solid var(--duo-swan);
+  margin: 0 -10px;
+  border-radius: 0 0 30px 30px;
+  overflow: hidden;
+}
+.tabbar span {
+  flex: 1;
+  text-align: center;
+  padding: 11px 0 12px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--duo-hare);
+  border-top: 3px solid transparent;
+  cursor: default;
+}
+.tabbar span.active { color: var(--duo-green-deep); border-top-color: var(--duo-green); background: var(--duo-green-tint); }
+
+.phone-caption { font-size: 11.5px; color: var(--duo-wolf); font-weight: 700; text-align: center; margin: 0; }
+
+/* ==========================================================================
+   5. 手機內嘅卡片（Duolingo 卡片：白底 + 2px 邊 + 實色底座）
+   ========================================================================== */
+.s-card {
+  background: #fff;
+  border: 2px solid var(--duo-swan);
+  border-bottom: 4px solid var(--duo-swan);
+  border-radius: var(--duo-radius);
+  padding: 14px;
+}
+.s-card.lesson { background: var(--duo-green-tint); border-color: var(--duo-green-pale); border-bottom-color: var(--duo-green-pale); }
+/* 任務卡：左邊一條綠色「任務條」，一眼認得出係 SpeakOut Mission */
+.s-card.mission { border-left: 6px solid var(--duo-green); }
+/* 預演卡：藍色為主，同「出門前準備」呢個階段對應 */
+.s-card.rehearsal { border-left: 6px solid var(--duo-blue); }
+
+.s-tag {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 9999px;
+  background: var(--duo-snow);
+  color: var(--duo-wolf);
+  margin-bottom: 8px;
+}
+.s-tag.green { background: var(--duo-green-pale); color: #3f7a02; }
+.s-tag.blue { background: var(--duo-blue-pale); color: var(--duo-blue-deep); }
+.s-tag.red { background: #ffe3e3; color: var(--duo-red-deep); }
+.s-tag.gold { background: #fff6d6; color: #a37c00; }
+
+.s-card h3 { font-size: 18px; margin-bottom: 6px; }
+.s-sub { margin: 0 0 8px; font-size: 12.5px; color: var(--duo-wolf); font-weight: 700; }
+.s-hook {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--duo-ink);
+  background: var(--duo-snow);
+  border-radius: var(--duo-radius-sm);
+  padding: 9px 11px;
+}
+
+/* Duo 對白泡 */
+.duo-line { display: flex; gap: 9px; align-items: flex-start; margin-bottom: 10px; }
+.duo-line .owl { width: 42px; height: 42px; flex: none; }
+.duo-line .bubble {
+  position: relative;
+  background: var(--duo-green-pale);
+  color: #2f5d00;
+  border-radius: 14px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+.duo-line .bubble::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 14px;
+  width: 12px;
+  height: 12px;
+  background: var(--duo-green-pale);
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+.duo-line.warn .bubble { background: #fff2e0; color: #8a5600; }
+.duo-line.warn .bubble::before { background: #fff2e0; }
+
+.s-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.s-meta span {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--duo-wolf);
+  background: var(--duo-snow);
+  border-radius: 9999px;
+  padding: 4px 9px;
+}
+.s-block { margin-bottom: 10px; }
+.s-block > b {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--duo-hare);
+  margin-bottom: 5px;
+}
+.s-block p { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.5; }
+.s-block.why p { color: var(--duo-wolf); }
+
+.s-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.chip {
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 4px 9px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid var(--duo-green-pale);
+  color: #3f7a02;
+}
+.s-weak { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.s-weak b { font-size: 11px; text-transform: uppercase; color: var(--duo-hare); letter-spacing: 0.05em; }
+.s-weak span { background: #fff2e0; color: #8a5600; border-radius: 9999px; padding: 3px 8px; font-weight: 800; font-size: 11.5px; }
+
+/* 粵語例句（正字 + 粵拼 + 英文） */
+.phrases { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.phrases li {
+  background: var(--duo-snow);
+  border-radius: var(--duo-radius-sm);
+  padding: 9px 11px;
+  border-left: 4px solid var(--duo-green);
+}
+.phrases .yue { display: block; font-size: 15px; font-weight: 800; color: var(--duo-black); }
+.phrases .jp { display: block; font-size: 11.5px; font-weight: 700; color: var(--duo-blue-deep); font-family: var(--duo-mono); margin-top: 2px; }
+.phrases .en { display: block; font-size: 11.5px; font-weight: 600; color: var(--duo-wolf); margin-top: 2px; }
+
+.checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.checks li { font-size: 12.5px; font-weight: 700; padding-left: 22px; position: relative; line-height: 1.45; }
+.checks li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  top: -1px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--duo-green-pale);
+  color: #3f7a02;
+  font-size: 11px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.tips { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tips li { font-size: 12.5px; font-weight: 700; padding-left: 18px; position: relative; line-height: 1.45; }
+.tips li::before { content: '🦉'; position: absolute; left: 0; font-size: 10px; }
+
+/* 獎勵列 */
+.s-reward {
+  margin-top: 4px;
+  background: linear-gradient(135deg, #fff8e1, #fffdf3);
+  border: 2px solid var(--duo-gold);
+  border-radius: var(--duo-radius-sm);
+  padding: 9px 11px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #8a6a00;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* 預演對話 */
+.dialogue { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.turn { display: flex; gap: 8px; align-items: flex-start; }
+.turn .who {
+  flex: none;
+  width: 46px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 4px 0;
+  border-radius: 9999px;
+  background: var(--duo-snow);
+  color: var(--duo-wolf);
+}
+.turn.learner .who { background: var(--duo-green-pale); color: #3f7a02; }
+.turn.staff .who { background: var(--duo-blue-pale); color: var(--duo-blue-deep); }
+.turn > div { flex: 1; border-radius: var(--duo-radius-sm); padding: 8px 10px; background: var(--duo-snow); }
+.turn.learner > div { background: var(--duo-green-tint); }
+.turn.staff > div { background: #eef8ff; }
+.turn p { margin: 0; }
+.turn .yue { font-size: 14px; font-weight: 800; color: var(--duo-black); }
+.turn .jp { font-size: 11px; font-family: var(--duo-mono); color: var(--duo-blue-deep); font-weight: 700; }
+.turn .en { font-size: 11.5px; color: var(--duo-wolf); font-weight: 600; }
+
+.s-confidence { font-size: 12px; font-weight: 800; color: var(--duo-wolf); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.s-confidence .bar { flex: 1; min-width: 80px; height: 12px; background: var(--duo-swan); border-radius: 9999px; overflow: hidden; }
+.s-confidence .bar i { display: block; height: 100%; background: var(--duo-blue); border-radius: 9999px; }
+
+/* ==========================================================================
+   6. 到店 / 圍欄
+   ========================================================================== */
+.s-mapbox { margin: 2px 0 10px; border-radius: var(--duo-radius-sm); overflow: hidden; border: 2px solid var(--duo-swan); }
+.s-mapbox svg { display: block; width: 100%; height: auto; }
+.s-distance { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.s-distance b { font-size: 26px; font-weight: 800; color: var(--duo-black); }
+.s-distance span { font-size: 12.5px; font-weight: 800; color: var(--duo-green-deep); }
+.s-distance em { font-size: 11px; font-weight: 700; color: var(--duo-hare); font-style: normal; margin-left: auto; }
+.s-flags {
+  background: #fff2e0;
+  border: 2px solid #ffd79a;
+  border-radius: var(--duo-radius-sm);
+  padding: 8px 10px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #8a5600;
+  margin-bottom: 8px;
+}
+.s-msg { margin: 0 0 8px; font-size: 13.5px; font-weight: 700; line-height: 1.5; }
+.s-note { font-size: 12.5px; font-weight: 700; color: var(--duo-wolf); text-align: center; padding: 8px; }
+
+.code-box {
+  background: var(--duo-green-tint);
+  border: 2px solid var(--duo-green-pale);
+  border-radius: var(--duo-radius);
+  padding: 12px;
+  text-align: center;
+}
+.code-label { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--duo-green-deep); }
+.code { display: flex; justify-content: center; gap: 8px; margin: 9px 0; }
+.code i {
+  font-style: normal;
+  width: 46px;
+  height: 56px;
+  border-radius: var(--duo-radius-sm);
+  background: #fff;
+  border: 2px solid var(--duo-swan);
+  border-bottom: 4px solid var(--duo-swan);
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--duo-black);
+  font-family: var(--duo-mono);
+}
+.code-ttl { font-size: 11.5px; font-weight: 700; color: var(--duo-wolf); }
+.code-ttl b { color: var(--duo-green-deep); font-family: var(--duo-mono); }
+.code-ttl b.low { color: var(--duo-red); }
+
+.gps-seg { display: flex; gap: 5px; flex-wrap: wrap; }
+.gps-seg button {
+  flex: 1;
+  min-width: 68px;
+  font-family: var(--duo-font);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 7px 4px;
+  border-radius: var(--duo-radius-sm);
+  border: 2px solid var(--duo-swan);
+  border-bottom: 4px solid var(--duo-swan);
+  background: #fff;
+  color: var(--duo-wolf);
+  cursor: pointer;
+}
+.gps-seg button.active {
+  background: var(--duo-blue-pale);
+  border-color: var(--duo-blue);
+  border-bottom-color: var(--duo-blue-deep);
+  color: var(--duo-blue-deep);
+}
+
+/* ==========================================================================
+   7. 驗證 / 獎勵 / City Stamp
+   ========================================================================== */
+.s-card.verified, .s-card.reward { text-align: center; }
+.big-icon { font-size: 44px; line-height: 1; margin-bottom: 4px; animation: bounceIn 520ms var(--duo-spring); }
+@keyframes bounceIn {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.14); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.verify-chain { display: flex; gap: 8px; margin: 12px 0; }
+.verify-chain > div {
+  flex: 1;
+  border-radius: var(--duo-radius-sm);
+  padding: 9px 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 2px solid;
+}
+.verify-chain .pass { background: var(--duo-green-pale); border-color: var(--duo-green); color: #3f7a02; }
+.verify-chain .fail { background: #ffe3e3; border-color: var(--duo-red); color: var(--duo-red-deep); }
+.verify-chain b { display: block; font-size: 12.5px; margin-top: 3px; text-transform: none; letter-spacing: 0; }
+
+/* City Stamp 圓形徽章 */
+.stamp {
+  width: 108px;
+  height: 108px;
+  margin: 6px auto 8px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 44px;
+  background: var(--duo-snow);
+  border: 4px solid var(--duo-swan);
+  border-bottom-width: 7px;
+  color: var(--duo-swan);
+  position: relative;
+}
+.stamp.on {
+  background: radial-gradient(circle at 50% 35%, #fff9e6, #ffeeb5);
+  border-color: var(--duo-gold);
+  border-bottom-color: #d9a800;
+  animation: stampIn 720ms var(--duo-spring);
+}
+@keyframes stampIn {
+  0% { transform: scale(0.3) rotate(-24deg); opacity: 0; }
+  55% { transform: scale(1.18) rotate(6deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); }
+}
+.stamp .ribbon {
+  position: absolute;
+  bottom: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--duo-gold);
+  color: #6b5200;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  box-shadow: 0 2px 0 #d9a800;
+}
+
+/* 獎勵數字（XP / Gems / Streak） */
+.reward-row { display: flex; gap: 9px; margin: 12px 0; }
+.reward-pill {
+  flex: 1;
+  border-radius: var(--duo-radius);
+  padding: 10px 8px;
+  border: 2px solid;
+  animation: bounceIn 600ms var(--duo-spring) backwards;
+}
+.reward-pill .v { display: block; font-size: 21px; font-weight: 800; line-height: 1.1; }
+.reward-pill .k { display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.8; }
+.reward-pill.xp { background: #fff8e1; border-color: var(--duo-gold); color: #8a6a00; }
+.reward-pill.gem { background: #f9f0ff; border-color: var(--duo-gem); color: #7b3fb5; }
+.reward-pill.streak { background: #fff3e6; border-color: var(--duo-orange); color: var(--duo-orange-deep); }
+.reward-pill:nth-child(1) { animation-delay: 80ms; }
+.reward-pill:nth-child(2) { animation-delay: 200ms; }
+.reward-pill:nth-child(3) { animation-delay: 320ms; }
+
+.scope-note {
+  text-align: left;
+  background: var(--duo-snow);
+  border-left: 4px solid var(--duo-hare);
+  border-radius: var(--duo-radius-sm);
+  padding: 9px 11px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--duo-wolf);
+  line-height: 1.5;
+}
+.scope-note b { color: var(--duo-ink); }
+.map-entry {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  background: var(--duo-green-tint);
+  border: 2px solid var(--duo-green-pale);
+  border-radius: var(--duo-radius-sm);
+  padding: 9px 11px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #3f7a02;
+  margin-top: 10px;
+}
+
+/* ==========================================================================
+   8. 進度地圖（Duolingo 學習路徑風格）
+   ========================================================================== */
+.path { display: flex; flex-direction: column; gap: 0; }
+.path-node { display: flex; align-items: center; gap: 12px; position: relative; padding: 5px 0; }
+.path-node .bubble {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  background: var(--duo-swan);
+  border-bottom: 6px solid var(--duo-swan-deep);
+  color: #fff;
+}
+.path-node.on .bubble { background: var(--duo-green); border-bottom-color: var(--duo-green-deep); }
+.path-node.current .bubble { box-shadow: 0 0 0 5px var(--duo-green-pale); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+.path-node .meta { min-width: 0; }
+.path-node .meta b { display: block; font-size: 13.5px; font-weight: 800; color: var(--duo-black); }
+.path-node .meta span { font-size: 11.5px; font-weight: 700; color: var(--duo-wolf); }
+.path-node.off .meta b { color: var(--duo-hare); }
+.path-node::after {
+  content: '';
+  position: absolute;
+  left: 28px;
+  top: 60px;
+  height: 14px;
+  width: 4px;
+  background: var(--duo-swan);
+  border-radius: 9999px;
+}
+.path-node:last-child::after { display: none; }
+.path-node.on::after { background: var(--duo-green-pale); }
+
+/* ==========================================================================
+   9. 排行榜 / Friend Mission
+   ========================================================================== */
+.league-table { display: flex; flex-direction: column; gap: 5px; }
+.league-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--duo-radius-sm);
+  background: var(--duo-snow);
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.league-row .rank { width: 22px; color: var(--duo-wolf); font-family: var(--duo-mono); }
+.league-row .name { flex: 1; color: var(--duo-ink); }
+.league-row .xp { color: var(--duo-wolf); font-family: var(--duo-mono); font-size: 11.5px; }
+.league-row.you { background: var(--duo-green-pale); border: 2px solid var(--duo-green); color: #2f5d00; }
+.league-row.you .name, .league-row.you .rank { color: #2f5d00; }
+.league-row.promo { border-left: 4px solid var(--duo-gold); }
+.league-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.league-head b { font-size: 14px; font-weight: 800; color: var(--duo-black); }
+.league-head span { font-size: 11px; font-weight: 800; color: var(--duo-wolf); }
+
+.friend-box {
+  background: linear-gradient(135deg, #f3e9ff, #fbf7ff);
+  border: 2px solid #e2cdff;
+  border-radius: var(--duo-radius);
+  padding: 11px;
+  margin-top: 10px;
+  text-align: left;
+}
+.friend-box b { display: block; font-size: 13px; font-weight: 800; color: #6b2fa8; margin-bottom: 3px; }
+.friend-box p { margin: 0 0 8px; font-size: 11.5px; font-weight: 700; color: #7b4bb0; line-height: 1.5; }
+.friend-box .code-chip {
+  display: inline-block;
+  font-family: var(--duo-mono);
+  font-size: 12.5px;
+  font-weight: 800;
+  background: #fff;
+  border: 2px dashed var(--duo-gem);
+  color: #6b2fa8;
+  border-radius: var(--duo-radius-sm);
+  padding: 5px 10px;
+  letter-spacing: 0.08em;
+}
+
+/* ==========================================================================
+   10. 分享卡（可導出 PNG）
+   ========================================================================== */
+.share-canvas {
+  background: linear-gradient(160deg, var(--duo-green), #3ea300 70%);
+  border-radius: var(--duo-radius);
+  padding: 15px;
+  color: #fff;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+.share-canvas::after {
+  content: '';
+  position: absolute;
+  right: -34px;
+  bottom: -34px;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.13);
+}
+.sc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.sc-logo { font-size: 13px; font-weight: 800; letter-spacing: 0.01em; }
+.sc-badge {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--duo-gold);
+  color: #6b5200;
+  border-radius: 9999px;
+  padding: 3px 8px;
+}
+.share-canvas h3 { color: #fff; font-size: 22px; line-height: 1.2; margin-bottom: 5px; }
+.sc-sub { margin: 0 0 8px; font-size: 11.5px; font-weight: 800; opacity: 0.92; }
+.sc-body { margin: 0 0 11px; font-size: 12.5px; font-weight: 600; line-height: 1.55; opacity: 0.97; }
+.sc-stats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+.sc-stats span {
+  background: rgba(255, 255, 255, 0.95);
+  color: #3f7a02;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 9999px;
+  padding: 4px 10px;
+}
+.sc-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.sc-tags span { font-size: 11px; font-weight: 800; opacity: 0.92; }
+.sc-foot { font-size: 10.5px; font-weight: 700; opacity: 0.85; }
+.sc-advocacy {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 2px dashed rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  font-weight: 800;
+  position: relative;
+  z-index: 1;
+}
+.share-targets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
+.share-targets button {
+  font-family: var(--duo-font);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 7px 12px;
+  border-radius: var(--duo-radius-sm);
+  border: 2px solid var(--duo-swan);
+  border-bottom: 4px solid var(--duo-swan);
+  background: #fff;
+  color: var(--duo-wolf);
+  cursor: pointer;
+}
+.share-targets button:active { transform: translateY(3px); border-bottom-width: 2px; }
+
+.s-block.next { border: 2px solid var(--duo-blue); border-radius: var(--duo-radius-sm); padding: 10px; background: var(--duo-blue-pale); }
+.s-block.next > b { color: var(--duo-blue-deep); }
+.s-loop {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--duo-green-deep);
+  background: var(--duo-green-tint);
+  border-radius: var(--duo-radius-sm);
+  padding: 9px 11px;
+  line-height: 1.5;
+}
+
+/* ==========================================================================
+   11. Agent 時間線
+   ========================================================================== */
+.timeline-wrap {
+  background: #fff;
+  border: 2px solid var(--duo-swan);
+  border-bottom: 4px solid var(--duo-swan);
+  border-radius: var(--duo-radius);
+  display: flex;
+  flex-direction: column;
+  min-height: 720px;
+  max-height: calc(100vh - 110px);
+  overflow: hidden;
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 2px solid var(--duo-swan);
+  background: var(--duo-snow);
+}
+.panel-head h2 { font-size: 16px; }
+.panel-head-right { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill {
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  background: var(--duo-swan);
+  color: var(--duo-wolf);
+  font-family: var(--duo-mono);
+}
+.pill.ok { background: var(--duo-green-pale); color: #3f7a02; }
+
+.timeline { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.timeline .empty { text-align: center; color: var(--duo-wolf); margin: auto 0; padding: 24px 8px; }
+.timeline .empty strong { display: block; font-size: 15px; font-weight: 800; color: var(--duo-ink); margin-bottom: 6px; }
+.timeline .empty p { font-size: 12.5px; font-weight: 600; line-height: 1.6; }
+
+.tl-item { display: flex; gap: 9px; align-items: flex-start; font-size: 12.5px; animation: slideIn 260ms ease-out; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+.tl-item .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--duo-swan); flex: none; margin-top: 5px; }
+.tl-item.step .dot { background: var(--duo-blue); }
+.tl-item.step.running .dot { background: var(--duo-orange); animation: pulse 1.4s ease-in-out infinite; }
+.tl-item.step.done .dot { background: var(--duo-green); }
+.tl-item.step.error .dot { background: var(--duo-red); }
+.tl-item.tool .dot { background: var(--duo-green); }
+.tl-item.result .dot { background: var(--duo-green-deep); }
+.tl-item.plan .dot { background: var(--duo-gem); }
+.tl-item.notice .dot { background: var(--duo-gold); }
+.tl-item.error .dot { background: var(--duo-red); }
+.tl-item.done .dot { background: var(--duo-green-deep); }
+.tl-item.done.error .dot { background: var(--duo-red); }
+.tl-body { flex: 1; min-width: 0; }
+.tl-body b { font-weight: 800; color: var(--duo-ink); }
+.tl-body p { margin: 2px 0 0; line-height: 1.55; }
+.tl-note { display: block; font-size: 11px; color: var(--duo-hare); font-weight: 700; margin-top: 1px; }
+.tl-item code {
+  font-family: var(--duo-mono);
+  font-size: 11px;
+  background: var(--duo-snow);
+  border-radius: 6px;
+  padding: 1px 5px;
+  color: var(--duo-blue-deep);
+  font-weight: 700;
+}
+.tl-item details { margin-top: 4px; }
+.tl-item summary { font-size: 11px; font-weight: 800; color: var(--duo-blue-deep); cursor: pointer; }
+.tl-item pre {
+  margin: 5px 0 0;
+  background: var(--duo-black);
+  color: #c8f7a0;
+  font-family: var(--duo-mono);
+  font-size: 10.5px;
+  padding: 9px;
+  border-radius: var(--duo-radius-sm);
+  overflow-x: auto;
+  max-height: 210px;
+  line-height: 1.5;
+}
+.badge { font-size: 9.5px; font-weight: 800; padding: 1px 6px; border-radius: 9999px; text-transform: uppercase; }
+.badge.ok { background: var(--duo-green-pale); color: #3f7a02; }
+.badge.bad { background: #ffe3e3; color: var(--duo-red-deep); }
+.plan-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.plan-chips span { font-size: 11px; font-weight: 800; background: #f7efff; color: #7b3fb5; border-radius: 9999px; padding: 3px 9px; }
+.tl-item.narration p { font-weight: 700; color: var(--duo-ink); }
+.tl-item.stream p { font-weight: 700; }
+.tl-item.notice p { background: #fff8e1; border-left: 3px solid var(--duo-gold); padding: 6px 9px; border-radius: 8px; font-weight: 700; }
+.tl-item.error p { background: #ffe9e9; border-left: 3px solid var(--duo-red); padding: 6px 9px; border-radius: 8px; font-weight: 700; color: var(--duo-red-deep); }
+
+/* ==========================================================================
+   12. 右側面板
+   ========================================================================== */
+.side { display: flex; flex-direction: column; gap: 14px; }
+.card {
+  background: #fff;
+  border: 2px solid var(--duo-swan);
+  border-bottom: 4px solid var(--duo-swan);
+  border-radius: var(--duo-radius);
+  padding: 13px;
+}
+.card h3 { font-size: 14px; margin-bottom: 9px; }
+.kv { display: grid; grid-template-columns: 82px 1fr; gap: 5px 10px; margin: 0; font-size: 12px; }
+.kv dt { color: var(--duo-hare); font-weight: 800; }
+.kv dd { margin: 0; font-weight: 700; color: var(--duo-ink); word-break: break-all; font-family: var(--duo-mono); font-size: 11.5px; }
+.hint { margin: 9px 0 0; font-size: 11px; font-weight: 600; color: var(--duo-wolf); line-height: 1.55; }
+#map { width: 100%; height: auto; display: block; }
+.bullets { margin: 0; padding-left: 17px; display: flex; flex-direction: column; gap: 7px; }
+.bullets li { font-size: 11.5px; font-weight: 600; line-height: 1.55; }
+.bullets b { font-weight: 800; color: var(--duo-black); }
+.brand-card { background: var(--duo-green-tint); border-color: var(--duo-green-pale); border-bottom-color: var(--duo-green-pale); }
+.brand-card h3 { color: #3f7a02; }
+
+/* ==========================================================================
+   13. 彈窗（動態碼輸入）
+   ========================================================================== */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(19, 31, 35, 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 90;
+  padding: 18px;
+  animation: fadeIn 160ms ease-out;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  background: #fff;
+  border-radius: var(--duo-radius);
+  padding: 20px;
+  width: 400px;
+  max-width: 100%;
+  border-bottom: 6px solid var(--duo-swan);
+  animation: bounceIn 380ms var(--duo-spring);
+}
+.modal h3 { font-size: 17px; margin-bottom: 6px; }
+.modal .hint { margin-bottom: 12px; }
+.modal input {
+  width: 100%;
+  font-family: var(--duo-mono);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  text-align: center;
+  padding: 12px;
+  border: 2px solid var(--duo-swan);
+  border-radius: var(--duo-radius-sm);
+  color: var(--duo-black);
+  margin-bottom: 12px;
+}
+.modal input:focus { outline: none; border-color: var(--duo-blue); box-shadow: 0 0 0 3px rgba(28, 176, 246, 0.2); }
+.modal-row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* Duo 貓頭鷹動態 */
+.duo-owl { display: block; }
+.duo-owl .wing-l, .duo-owl .wing-r { transform-origin: center; }
+.duo-owl.wave .wing-r { animation: wave 900ms ease-in-out infinite; }
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-16deg); }
+}
+.duo-owl .body-g { animation: bob 3.4s ease-in-out infinite; }
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2.5px); }
+}
+.duo-owl .pupil { animation: blink 5s infinite; }
+@keyframes blink {
+  0%, 94%, 100% { opacity: 1; }
+  96%, 98% { opacity: 0.05; }
+}
+
+/* 手機屏上嘅 toast（解鎖提示） */
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  transform: translateX(-50%);
+  background: var(--duo-black);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 9px 15px;
+  border-radius: 9999px;
+  z-index: 20;
+  animation: toastIn 320ms var(--duo-spring);
+  white-space: nowrap;
+  max-width: 92%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

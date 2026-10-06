@@ -1,0 +1,15 @@
+{
+  "name": "speakout-pass-demo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SpeakOut Pass — 线下任务 Agent 交互演示（Node 零依赖后端 + 零构建前端）",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/server.mjs",
+    "start:mock": "node server/server.mjs --mock"
+  },
+  "keywords": ["deepseek", "agent", "tool-calls", "o2o", "demo"]
+}

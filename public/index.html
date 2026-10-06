@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-HK">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Duo 講講 · Cantonese SpeakOut Pass — Duolingo 粵語課程嘅城市延伸</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <!-- ============ 頂部：Duolingo 風格導覽列 ============ -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" id="brandOwl" aria-hidden="true"></div>
+        <div class="brand-text">
+          <strong>Duo 講講</strong>
+          <span>Cantonese SpeakOut Pass · Duolingo 粵語課程嘅城市延伸</span>
+        </div>
+      </div>
+
+      <ol class="flow" id="flow">
+        <li data-step="1"><i>1</i><span>Lesson Complete</span></li>
+        <li data-step="2"><i>2</i><span>Mission Revealed</span></li>
+        <li data-step="3"><i>3</i><span>Rehearsal</span></li>
+        <li data-step="4"><i>4</i><span>Verify</span></li>
+        <li data-step="5"><i>5</i><span>Reward</span></li>
+        <li data-step="6"><i>6</i><span>Share &amp; Next</span></li>
+      </ol>
+
+      <div class="controls">
+        <div class="seg" id="modeSeg" title="live=真實模型；mock=離線確定性引擎；auto=有 Key 走 live，失敗自動降級">
+          <button data-mode="auto" class="active">auto</button>
+          <button data-mode="live">live</button>
+          <button data-mode="mock">mock</button>
+        </div>
+        <div class="seg" id="speedSeg" title="時間線播放速度">
+          <button data-speed="instant">瞬間</button>
+          <button data-speed="fast" class="active">快</button>
+          <button data-speed="slow">慢</button>
+        </div>
+        <button class="btn ghost" id="btnAutoPlay" title="自動跑完 6 個場景（演示彩排用）">▶ 自動演示</button>
+        <button class="btn ghost" id="btnReset">重置</button>
+      </div>
+    </header>
+
+    <main class="stage">
+      <!-- ============ 左：學員手機（Duolingo App） ============ -->
+      <section class="phone-wrap">
+        <div class="phone">
+          <div class="phone-notch"></div>
+          <div class="statusbar">
+            <span id="clock">--:--</span>
+            <span class="status-right"><i class="sig"></i><i class="wifi"></i><i class="batt">86%</i></span>
+          </div>
+
+          <!-- Duolingo 式頂欄：課程 + 連續天數 / 寶石 / 心心 -->
+          <div class="app-head">
+            <div class="app-course">
+              <span class="flag" aria-hidden="true">🇭🇰</span>
+              <strong id="courseLabel">粵語</strong>
+              <span class="unit" id="unitLabel">Unit 3</span>
+            </div>
+            <div class="app-stats">
+              <span class="stat streak" id="statStreak" title="連續學習天數（Streak）">🔥 6</span>
+              <span class="stat gems" id="statGems" title="寶石（Gems）">💎 120</span>
+              <span class="stat hearts" id="statHearts" title="心心（Hearts）">❤️ 4</span>
+            </div>
+          </div>
+          <div class="goalbar" title="每日目標（Daily Goal）">
+            <i id="goalFill" style="width: 100%"></i>
+            <span id="goalText">今日 60 / 50 XP · 已達標 ✅</span>
+          </div>
+
+          <div class="screen" id="screen"><!-- 由 app.js 渲染 --></div>
+
+          <div class="actionbar" id="actionbar"><!-- 主按鈕 --></div>
+          <div class="tabbar">
+            <span data-tab="learn">學</span>
+            <span class="active" data-tab="mission">任務</span>
+            <span data-tab="map">地圖</span>
+            <span data-tab="league">聯盟</span>
+          </div>
+        </div>
+        <p class="phone-caption">學員端：課後頁 / 任務卡 / 預演 / 到店驗證 / City Stamp / 分享卡</p>
+      </section>
+
+      <!-- ============ 中：Agent 推理時間線 ============ -->
+      <section class="timeline-wrap">
+        <div class="panel-head">
+          <h2>Agent 推理時間線</h2>
+          <div class="panel-head-right">
+            <span class="pill" id="modePill">auto</span>
+            <span class="pill" id="usagePill">tokens 0</span>
+            <span class="pill" id="latencyPill">— ms</span>
+          </div>
+        </div>
+        <div class="timeline" id="timeline">
+          <div class="empty">
+            <strong>等待第一步</strong>
+            <p>
+              撳手機入面嘅「完成 Lesson 01」按鈕，你會睇到 Agent 點樣：<br />
+              搵 Friendly Spot → 生成任務卡 → 生成粵語預演 → 校驗圍欄 → 簽發同核銷動態碼 →
+              發放 City Stamp 同 XP → 生成分享卡與下一課。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 右：狀態 / 地圖 / 數據 ============ -->
+      <aside class="side">
+        <div class="card">
+          <h3>模型連接</h3>
+          <dl class="kv">
+            <dt>模式</dt><dd id="kMode">auto</dd>
+            <dt>Provider</dt><dd id="kProvider">檢測中…</dd>
+            <dt>模型</dt><dd id="kModel">deepseek-flash</dd>
+            <dt>Endpoint</dt><dd id="kBase">—</dd>
+          </dl>
+          <p class="hint" id="kHint"></p>
+        </div>
+
+        <div class="card">
+          <h3>位置與圍欄</h3>
+          <svg id="map" viewBox="0 0 420 250" preserveAspectRatio="xMidYMid meet" aria-label="到店校驗可視化"></svg>
+          <p class="hint" id="mapHint">圍欄半徑 120m · 撳開場景 3 之後顯示學員／門店相對位置</p>
+        </div>
+
+        <div class="card">
+          <h3>運行指標</h3>
+          <dl class="kv">
+            <dt>任務數</dt><dd id="kMissions">0</dd>
+            <dt>工具調用</dt><dd id="kTools">0</dd>
+            <dt>動態碼</dt><dd id="kCode">未簽發</dd>
+            <dt>雙重驗證</dt><dd id="kVerified">未開始</dd>
+          </dl>
+        </div>
+
+        <div class="card brand-card">
+          <h3>品牌定位（講稿要點）</h3>
+          <ul class="bullets">
+            <li><b>唔係第三方 App</b>：Duo 講講 係 Duolingo 粵語課程嘅自然延伸，用返同一套 streak / XP / Gems / 排行榜 / 成就徽章。</li>
+            <li><b>Duolingo has gamified learning. Duo 講講 gamifies using.</b></li>
+            <li><b>Same Duolingo. Same game. New city.</b></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>評委可能追問嘅 3 個點</h3>
+          <ul class="bullets">
+            <li><b>唔係靠模型判斷「到咗未」</b>：圍欄距離、碼值、時效、一次性全部由工具函數判定，模型只負責解釋同安撫。</li>
+            <li><b>失敗咗會點</b>：切到「仲喺路上 / 定位飄移 / 模擬定位」三種 fixture，睇 Agent 點俾補救建議同風控標記。</li>
+            <li><b>模型掛咗點算</b>：切 mock 模式，同一套工具、同一套 UI，零 API 都可以完整演示。</li>
+          </ul>
+        </div>
+      </aside>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

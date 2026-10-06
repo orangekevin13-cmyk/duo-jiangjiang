@@ -1,0 +1,14 @@
+# 唔需要入鏡像嘅檔案
+node_modules
+npm-debug.log
+.git
+.gitignore
+*.md
+!README.md
+_tmp-*
+dbg*.mjs
+.vscode
+.idea
+.DS_Store
+render.yaml
+fly.toml

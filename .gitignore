@@ -1,0 +1,20 @@
+# .gitignore — 唔好把示範密碼或者 API Key 推上 GitHub
+.env
+.env.*
+*.local
+
+# 憑證（絕對唔可以入 git）
+.credentials.yaml
+**/.dsh/
+
+node_modules
+npm-debug.log*
+
+# 臨時診斷檔案
+_tmp-*
+dbg*.mjs
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,72 @@
+# Duo 講講 · Cantonese SpeakOut Pass — Fly.io 設定
+#
+# 首次部署：
+#   fly launch --no-deploy --copy-config
+#   fly secrets set DEMO_PASSWORD=你的示範密碼
+#   fly secrets set DEEPSEEK_API_KEY=sk-xxxxxxxx        # 只有要開真實模型先需要
+#   fly deploy
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠ 兩條唔可以改嘅硬規則（改咗會出代價）
+#
+# 1) 必須只跑一個 instance。
+#    會話狀態存喺進程記憶體（每位訪客一個 session）。如果 Fly 開多過一部機，
+#    同一個訪客嘅請求會被分流去唔同機器，佢會見到進度突然消失或者跳返第一步。
+#    下面已經用 min_machines_running = 1 + auto_stop_machines = false + auto_start_machines = false
+#    鎖死「永遠一部、唔加唔減」。
+#    如果你之後要水平擴展，一定要先把會話搬去 Redis 之類嘅共享存儲。
+#
+# 2) DEMO_MODE=live 即係「任何人拿到網址都可以燒你嘅錢」。
+#    呢個部署係俾老師評委自己開嘅，網址一定會流傳（貼群、轉發）。
+#    請務必：
+#      · 保持 DEMO_PASSWORD 開啟（下面已經開）
+#      · 睇實 RATE_PER_MIN（預設 20/分鐘／每位訪客）
+#      · 喺 Fly 設定 spend limit，或者定期 fly apps list / 睇 DeepSeek 用量
+#      · 演示期完結後，即刻改返 DEMO_MODE=mock、LIVE_ALLOWED=0：
+#          fly secrets set DEMO_MODE=mock LIVE_ALLOWED=0
+#        咁樣即使網址流出都唔會再產生成本。
+# ─────────────────────────────────────────────────────────────────────────────
+app = "duo-jiangjiang"
+primary_region = "hkg" # 香港，粵語演示最貼題，延遲最低
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8080"
+  # 你揀咗真實模型：唔設呢個 secret 服務器會自動降級做 mock（唔會報錯）。
+  DEMO_MODE = "live"
+  LIVE_ALLOWED = "1"
+  # 限流係你嘅成本閘門：每位訪客每分鐘最多 20 次場景調用。
+  # 每次完整演示約 6-7 萬 tokens（≈¥0.1-0.3）。收窄呢個數就係收窄風險。
+  RATE_PER_MIN = "20"
+  GLOBAL_CONCURRENCY = "4"
+  SESSION_TTL_MINUTES = "90"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # 三部鎖死：唔停機、唔自動開新機、永遠維持一部
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 40
+    hard_limit = 80
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "3s"
+  grace_period = "5s"
+  method = "GET"
+  path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  # live 模式下每次模型調用會 hold 住請求幾秒，256MB 夠用；
+  # 如果之後見到 OOM，加到 512mb。
+  memory = "512mb"

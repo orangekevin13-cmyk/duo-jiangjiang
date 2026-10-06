@@ -1,0 +1,61 @@
+# Duo 講講 · Cantonese SpeakOut Pass — Render Blueprint
+#
+# 用法：
+#   1. 把呢個資料夾推上 GitHub（先確認唔好 commit 任何憑證）
+#   2. Render → New → Blueprint → 揀你嘅 repo
+#   3. Render 讀呢個檔案，部署時會問你填兩個 secret（sync: false = 唔入 git）：
+#        DEMO_PASSWORD      示範密碼
+#        DEEPSEEK_API_KEY   真實模型嘅 Key（你有揀 live 模式）
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠ 兩條一定要知嘅事
+#
+# 1) 免費層閒置 15 分鐘會休眠，老師第一次打開要等約 30 秒（畫面白一陣之後自己出）。
+#    想避免：見 DEPLOY.md 第 5 節「叫醒服務」。Render 免費層唔可以設 min_machines_running。
+#
+# 2) 必須只跑一個 instance。
+#    會話狀態存喺進程記憶體（每位訪客一個 session，用 cookie 綁定）。
+#    多過一部機，同一個訪客嘅請求會被分流，佢會見到進度突然跳返第一步。
+#    免費層預設就係一部，所以唔好加 instance，亦唔好開 autoscaling。
+#    將來要水平擴展，必須先把會話搬去 Redis 之類嘅共享存儲。
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  - type: web
+    name: duo-jiangjiang
+    runtime: node
+    # 免費層：無需信用卡。缺點係會休眠（見上面第 1 點）
+    plan: free
+    # 新加坡節點：香港同華南地區延遲最低（Render 冇香港節點）
+    region: singapore
+    branch: main
+    # 零 npm 依賴，唔需要 build 步驟
+    buildCommand: echo "零 npm 依賴，唔需要 build"
+    startCommand: node server/server.mjs
+    # 平台用嘅健康檢查（唔需要認證，亦唔會洩漏任何內容）
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      # Render 需要服務綁定所有介面，否則平台連唔到
+      - key: HOST
+        value: 0.0.0.0
+      # 你揀咗真實模型。冇設 DEEPSEEK_API_KEY 時會自動降級做 mock，
+      # 而且啟動 log 會大聲警告，唔會靜靜地唔知。
+      - key: DEMO_MODE
+        value: live
+      # 成本保險絲：改成 "0" 就即刻停用收費模型（唔需要重新部署，Render 會自動重啟）。
+      # 演示期完結後建議設 "0"，網址就算流出都唔會再產生成本。
+      - key: LIVE_ALLOWED
+        value: "1"
+      # 限流係你嘅成本閘門。免費層單一 instance，一次跑唔到太多並發，所以呢個數唔宜太大。
+      - key: RATE_PER_MIN
+        value: "12"
+      - key: GLOBAL_CONCURRENCY
+        value: "3"
+      - key: SESSION_TTL_MINUTES
+        value: "90"
+      # 示範密碼：喺 Render 介面填（sync: false 表示唔會入 git）
+      - key: DEMO_PASSWORD
+        sync: false
+      # 真實模型嘅 Key：喺 Render 介面填
+      - key: DEEPSEEK_API_KEY
+        sync: false
