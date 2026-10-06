@@ -239,8 +239,7 @@ function sendJson(res, status, payload) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    let size = 0;
-    req.on('data', (c) => {
+    let size = 0;    req.on('data', (c) => {
       size += c.length;
       if (size > 1_000_000) {
         reject(new Error('body too large'));
@@ -257,6 +256,46 @@ function readBody(req) {
       } catch (err) {
         reject(new Error(`invalid JSON body: ${err.message}`));
       }
+    });
+    req.on('error', reject);
+  });
+}
+
+/**
+ * Read a body that may arrive as EITHER:
+ *   - application/json            (scripts, curl, the demo front-end)
+ *   - application/x-www-form-urlencoded  (a plain <form> POST — what the login page uses)
+ *
+ * The login page is a normal HTML form, and browsers default to urlencoded. Parsing that with
+ * JSON.parse is what produced the useless "請求格式有問題" error on every login attempt.
+ */
+function readForm(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > 100_000) {
+        reject(new Error('body too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
+      if (!raw) return resolve({});
+      const type = String(req.headers['content-type'] || '').toLowerCase();
+      // Trust the declared type first; fall back to sniffing so a missing/odd header still works.
+      if (type.includes('application/json') || (!type.includes('form-urlencoded') && raw.trimStart().startsWith('{'))) {
+        try {
+          return resolve(JSON.parse(raw));
+        } catch (err) {
+          return reject(new Error(`invalid JSON body: ${err.message}`));
+        }
+      }
+      const params = new URLSearchParams(raw);
+      return resolve(Object.fromEntries(params.entries()));
     });
     req.on('error', reject);
   });
@@ -429,7 +468,7 @@ async function route(req, res) {
   /* ---------------- auth ---------------- */
   if (pathname === '/login' && req.method === 'POST') {
     try {
-      const body = await readBody(req);
+      const body = await readForm(req);
       const pass = String(body.password || '').trim();
       if (timingSafeEqual(pass, DEMO_PASSWORD)) {
         res.writeHead(302, {
@@ -438,12 +477,13 @@ async function route(req, res) {
         });
         res.end();
       } else {
-        res.writeHead(401, { 'content-type': 'text/html; charset=utf-8' });
-        res.end(loginPage('密碼唔啱，再試一次。'));
+        res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+        res.end(loginPage(pass ? '密碼唔啱，再試一次。' : '請輸入密碼。'));
       }
-    } catch {
-      res.writeHead(400, { 'content-type': 'text/html; charset=utf-8' });
-      res.end(loginPage('請求格式有問題。'));
+    } catch (err) {
+      console.error('[duo-jiangjiang] /login 解析失敗 ::', String(err?.message || err));
+      res.writeHead(400, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(loginPage('請求格式有問題，請返回上一頁再試。'));
     }
     return;
   }
