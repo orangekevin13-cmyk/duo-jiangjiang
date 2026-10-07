@@ -19,6 +19,14 @@ const api = {
   scenario: (name, input = {}, onEvent) => streamScenario(name, input, onEvent),
 };
 const SPEED_MS = { instant: 0, fast: 140, slow: 420 };
+
+/**
+ * 介面版本。每次改前端都應該更新，方便一眼確認瀏覽器跑緊邊份程式碼
+ * （舊快取係呢個專案反覆出現嘅問題）。
+ * 喺 Console 打 `DUO_BUILD` 就睇得到。
+ */
+const BUILD = 'map-popup-1';
+window.DUO_BUILD = BUILD;
 const SPOOF_DEG = 0.00035; // 門店座標向西南偏移，用於「座標與門店完全重合」演示
 
 /** Duolingo palette, mirrored from styles.css so the canvas export matches the DOM. */
@@ -64,6 +72,7 @@ const state = {
   // 一個場景可能一次送幾個 panel，一次只顯示一個，其餘排隊等用戶推進
   panelQueue: [],
   showingPanel: false,
+  mapDismissed: false, // 用戶收起任務地圖之後，唔好再自動彈（但可以手動再開）
 };
 
 /* ---------------------------------------------------------------- *
@@ -174,6 +183,14 @@ function phraseChips(phrases) {
 async function runScenario(name, input = {}) {
   if (state.busy) return;
   state.busy = true;
+
+  // 開始新場景時一定要清空顯示佇列並解鎖。
+  // 否則上一個場景留低嘅「顯示中」鎖會令新場景嘅 panel 被排隊而唔顯示 ——
+  // 症狀係用戶撳掣之後畫面完全冇反應（按鈕好似壞咗）。
+  // 上一個場景未顯示嘅 panel 本來就係舊嘢，直接丟棄係正確做法。
+  state.panelQueue = [];
+  state.showingPanel = false;
+
   renderAction();
   try {
     await api.scenario(name, input, (ev) => {
@@ -223,11 +240,27 @@ function stepForPanel(panel) {
  *
  * 所以規矩係：一次只顯示一個 panel，其餘排隊，等用戶撳掣推進。
  */
+/**
+ * 面板身份：用嚟分辨「同一個面板重複送」同「同類型但唔同內容嘅面板」。
+ * 例如核銷失敗再重試成功，兩次都係 `verified`，但內容唔同 —— 唔可以當重複過濾。
+ */
+function panelKey(p) {
+  const d = p?.data || {};
+  return `${p?.type}:${d.task_id || ''}:${d.submitted || ''}:${d.redeemed ?? ''}`;
+}
+
 function applyPanel(panel) {
   // 快取一定要喺排隊之前做：排隊嗰個 panel 未經 showPanel，
   // 如果等到顯示先快取，用戶撳「睇任務卡」之前 missionPanel 會係 null。
   if (panel.type === 'spots') state.nearbySpots = panel.data;
   if (panel.type === 'mission') state.missionPanel = panel.data;
+
+  // 去重：伺服器嘅 SSE 送一次 panel，done payload 又送同一個。
+  // 唔去重嘅話任務卡會排隊兩次，用戶要撳兩下「睇任務卡」。
+  // 只喺「同一個面板」時才過濾，同類型但內容唔同（例如重試核銷）要照樣更新。
+  const key = panelKey(panel);
+  if (state.panel && panelKey(state.panel) === key) return;
+  if (state.panelQueue.some((q) => panelKey(q) === key)) return;
 
   if (state.showingPanel) {
     state.panelQueue.push(panel);
@@ -320,6 +353,14 @@ function renderScreen() {
     screen.appendChild(targets);
   }
 
+  // 課後頁一出，任務地圖即刻「彈」出嚟 —— 話你知要去邊間店。
+  // 呢個係整個演示最重要嘅一瞬間：把「學完」變成「附近有一個真實任務」。
+  if (state.panel?.type === 'spots') {
+    const reopen = $('reopenMap');
+    if (reopen) reopen.addEventListener('click', () => openMissionMap(state.panel.data));
+    if (!state.mapDismissed) openMissionMap(state.panel.data);
+  }
+
   if (state.panel?.type === 'arrival') {
     const seg = document.createElement('div');
     seg.className = 'gps-seg';
@@ -384,52 +425,20 @@ function renderScreenBase() {
     return;
   }
 
-  /* ---------- Step 2a · 任務地圖（You're ready to use this outside Duolingo） ---------- */
+  /* ---------- Step 2a · 任務地圖（彈出話你知要去邊間店） ---------- */
   if (p.type === 'spots') {
     const s = p.data;
-    const others = (s.spots || []).filter((x) => !x.recommended);
     screen.innerHTML = `
       <div class="s-card lesson">
         <div class="duo-line">${owlSvg(46, 'wave')}<div class="bubble">You’re ready to use this outside Duolingo.</div></div>
-        <div class="s-tag green">📍 One SpeakOut Mission available ${s.recommended_distance_m ?? '—'}m away</div>
+        <div class="s-tag green">🎉 Lesson Complete · ${esc(s.lesson_id || 'L-01')}</div>
         <h3>${esc(s.mission_title || '附近有一個任務')}</h3>
         <p class="s-sub">${esc(s.origin_label || '你目前位置')} 附近有 ${(s.spots || []).length} 個 Friendly Spot</p>
       </div>
-
-      <div class="s-card map-pop">
-        <div class="s-block" style="margin-bottom:6px"><b>任務地圖 · Mission Map</b></div>
-        <div class="s-mapbox mission-map">${spotsMapSvg(s)}</div>
-        <div class="map-legend">
-          <span><i class="dot you"></i>你</span>
-          <span><i class="dot rec"></i>任務地點</span>
-          <span><i class="dot other"></i>其他 Friendly Spot</span>
-        </div>
-        <div class="map-entry">
-          🎯 <b>${esc(s.recommended_name || '')}</b> · 步行 ${s.recommended_walk_minutes ?? '—'} 分鐘（${s.recommended_distance_m ?? '—'}m）
-        </div>
-      </div>
-
-      ${
-        others.length
-          ? `<div class="s-card">
-               <div class="s-block" style="margin-bottom:6px"><b>附近仲有</b></div>
-               ${others
-                 .map(
-                   (o) => `<div class="spot-row">
-                     <span class="spot-icon">${spotIcon(o.category)}</span>
-                     <div><b>${esc(o.name)}</b><span>${esc(o.district || '')} · 步行 ${o.walk_minutes} 分鐘（${o.distance_m}m）</span></div>
-                   </div>`,
-                 )
-                 .join('')}
-             </div>`
-          : ''
-      }
-
       <div class="s-card">
-        <div class="s-block" style="margin-bottom:6px"><b>Friendly Spot 承諾</b>
-          <p><b>${esc(s.sign_text || '歡迎學講廣東話！講錯唔緊要，我哋慢慢聽。')}</b></p>
-        </div>
-        <div class="s-note" style="padding:0;text-align:left">呢啲店員願意聽初學者講粵語，唔會轉台講普通話。任務只要求「嘗試過」。</div>
+        <div class="s-block" style="margin-bottom:6px"><b>任務地點</b></div>
+        <div class="map-entry">🎯 <b>${esc(s.recommended_name || '')}</b> · 步行 ${s.recommended_walk_minutes ?? '—'} 分鐘（${s.recommended_distance_m ?? '—'}m）</div>
+        <button class="btn ghost wide" id="reopenMap">🗺️ 再睇一次任務地圖</button>
       </div>`;
     return;
   }
@@ -1041,6 +1050,84 @@ function spotIcon(category) {
   return '📍';
 }
 
+/* ---------------------------------------------------------------- *
+ * 任務地圖彈窗（Mission Map popup）
+ * 課後頁一出就彈出嚟，大字寫明「去邊間店」，唔使人自己搵。
+ * ---------------------------------------------------------------- */
+function closeMissionMap() {
+  const el = document.getElementById('missionMapOverlay');
+  if (el) el.remove();
+  state.mapDismissed = true;
+}
+
+function openMissionMap(s) {
+  const phone = document.querySelector('.phone');
+  if (!phone || !s) return;
+  document.getElementById('missionMapOverlay')?.remove();
+  state.mapDismissed = false;
+
+  const others = (s.spots || []).filter((x) => !x.recommended);
+  const overlay = document.createElement('div');
+  overlay.className = 'map-overlay';
+  overlay.id = 'missionMapOverlay';
+  overlay.innerHTML = `
+    <div class="map-sheet" role="dialog" aria-label="任務地圖">
+      <div class="map-sheet-head">
+        <span class="s-tag green" style="margin:0">📍 任務地圖 · Mission Map</span>
+        <button class="map-close" id="mapClose" aria-label="收起">✕</button>
+      </div>
+
+      <div class="map-dest">
+        <div class="map-dest-icon">${spotIcon(s.spots?.find((x) => x.recommended)?.category)}</div>
+        <div class="map-dest-text">
+          <span class="map-dest-label">你要去呢間店</span>
+          <b>${esc(s.recommended_name || '')}</b>
+          <span class="map-dest-meta">🚶 步行 ${s.recommended_walk_minutes ?? '—'} 分鐘 · ${s.recommended_distance_m ?? '—'}m</span>
+        </div>
+      </div>
+
+      <div class="s-mapbox mission-map">${spotsMapSvg(s)}</div>
+
+      <div class="map-legend">
+        <span><i class="dot you"></i>你</span>
+        <span><i class="dot rec"></i>任務地點</span>
+        <span><i class="dot other"></i>其他 Friendly Spot</span>
+      </div>
+
+      ${
+        others.length
+          ? `<div class="map-others">
+               <b>附近仲有</b>
+               ${others
+                 .map(
+                   (o) => `<div class="spot-row">
+                     <span class="spot-icon">${spotIcon(o.category)}</span>
+                     <div><b>${esc(o.name)}</b><span>${esc(o.district || '')} · 步行 ${o.walk_minutes} 分鐘（${o.distance_m}m）</span></div>
+                   </div>`,
+                 )
+                 .join('')}
+             </div>`
+          : ''
+      }
+
+      <div class="map-promise">${esc(s.sign_text || '歡迎學講廣東話！講錯唔緊要，我哋慢慢聽。')}</div>
+      <button class="btn primary" id="mapGo">知喇 · 睇任務卡</button>
+    </div>`;
+
+  phone.appendChild(overlay);
+  overlay.querySelector('#mapClose').addEventListener('click', closeMissionMap);
+  overlay.querySelector('#mapGo').addEventListener('click', () => {
+    closeMissionMap();
+    // 直接交棒畀佇列入面嘅任務卡，唔使用戶再撳主按鈕
+    if (state.panelQueue.length) advancePanelQueue();
+    else if (state.missionPanel) showPanel({ type: 'mission', data: state.missionPanel });
+  });
+  // 點背景都可以收起
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeMissionMap();
+  });
+}
+
 /**
  * 任務地圖：學員位置 + 附近所有 Friendly Spot，推薦嗰間高亮。
  * 用真實經緯度畫，比例忠實 —— 唔係裝飾圖，距離感同 verify_location 一致。
@@ -1521,5 +1608,9 @@ const esc = (s) =>
   renderSide();
   renderChromeStats();
   paintFlow();
+  // 版本標記：方便確認跑緊邊份程式碼（舊快取排查用）
+  console.log(`Duo 講講 介面版本 ${BUILD}`);
+  const techTitle = document.querySelector('.tech-head h2');
+  if (techTitle) techTitle.textContent = `技術面板 · Technical · ${BUILD}`;
   enqueue({ type: 'notice', level: 'info', text: '演示就緒：撳手機主按鈕，或者按空格鍵推進下一步。' });
 })();

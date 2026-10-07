@@ -938,8 +938,121 @@ h1, h2, h3, h4 {
 .path-node.on::after { background: var(--duo-green-pale); }
 
 /* ==========================================================================
-   8b. 任務地圖（Step 2 · REVEAL）—— Duolingo 學習路徑嘅空間版
+   8b. 任務地圖彈窗（課後頁一出就彈，話你知去邊間店）
    ========================================================================== */
+.map-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(19, 31, 35, 0.55);
+  border-radius: 34px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 30;
+  animation: fadeIn 200ms ease-out;
+  overflow: hidden;
+}
+.map-sheet {
+  width: 100%;
+  max-height: 94%;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 26px 26px 0 0;
+  padding: 14px 14px 16px;
+  animation: sheetUp 460ms var(--duo-spring);
+  box-shadow: 0 -6px 0 rgba(0, 0, 0, 0.08);
+}
+@keyframes sheetUp {
+  0% { transform: translateY(104%); }
+  70% { transform: translateY(-1.5%); }
+  100% { transform: translateY(0); }
+}
+.map-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.map-close {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--duo-swan);
+  background: #fff;
+  color: var(--duo-wolf);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  flex: none;
+  line-height: 1;
+}
+.map-close:active { transform: translateY(2px); }
+
+/* 大字寫明「你要去邊間店」—— 呢個係彈窗最重要嘅資訊 */
+.map-dest {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: var(--duo-green-pale);
+  border: 2px solid var(--duo-green);
+  border-radius: var(--duo-radius);
+  padding: 11px;
+  margin-bottom: 11px;
+}
+.map-dest-icon {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 50%;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 23px;
+  border-bottom: 3px solid var(--duo-green);
+}
+.map-dest-text { min-width: 0; }
+.map-dest-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #3f7a02;
+}
+.map-dest-text b {
+  display: block;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--duo-black);
+  line-height: 1.25;
+  margin: 1px 0 2px;
+}
+.map-dest-meta { display: block; font-size: 12px; font-weight: 800; color: #3f7a02; }
+
+.map-others { margin: 4px 0 8px; }
+.map-others > b {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--duo-hare);
+  margin-bottom: 2px;
+}
+.map-promise {
+  background: var(--duo-snow);
+  border-left: 4px solid var(--duo-green);
+  border-radius: var(--duo-radius-sm);
+  padding: 9px 11px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #2f5d00;
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+.map-sheet .btn.primary { width: 100%; }
+
 /* 彈出動畫：地圖「彈」出嚟，配合 Duolingo 嘅 back-out 彈性 */
 .s-card.map-pop {
   animation: mapPop 520ms var(--duo-spring);
