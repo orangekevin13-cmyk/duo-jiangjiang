@@ -165,6 +165,7 @@ DeepSeek 嘅 `response_format=json_object` 同 `tool_calls` 同時開啟時，�
 | [DEPLOY.md](DEPLOY.md) | **部署指南**：放上長期在線網址（Render / Fly / Docker / 隧道）+ 安全須知 |
 | [Dockerfile](Dockerfile) · [render.yaml](render.yaml) · [fly.toml](fly.toml) | 現成部署設定 |
 | [scripts/smoke-mock.mjs](scripts/smoke-mock.mjs) · [scripts/smoke-flow.mjs](scripts/smoke-flow.mjs) · [scripts/smoke-app-flow.mjs](scripts/smoke-app-flow.mjs) · [scripts/smoke-http.mjs](scripts/smoke-http.mjs) · [scripts/smoke-live.mjs](scripts/smoke-live.mjs) · [scripts/smoke-session.mjs](scripts/smoke-session.mjs) | 彩排自檢腳本（離線契約 / 六場景流程 / 真實前端流程 / HTTP+SSE / 真實模型 / 多訪客隔離） |
+| [scripts/make-qr.mjs](scripts/make-qr.mjs) | 產生演示網址嘅 QR code（可選帶密碼，掃碼即入） |
 
 彩排前建議各跑一次：
 
@@ -181,6 +182,29 @@ node scripts/smoke-live.mjs       # 直連 DeepSeek，驗證 6 場景 + 失敗�
 > `smoke-http.mjs`、`smoke-app-flow.mjs`、`smoke-session.mjs` 都會快速連續打 API，
 > **連續跑多個套件會撞到 429**，症狀係場景全部回 `undefined`。
 > 唔係程式有問題 —— 等 60 秒再跑，或者用 `RATE_PER_MIN=200` 重啟服務。
+
+### 產生演示網址嘅 QR code
+
+```bash
+node scripts/make-qr.mjs https://你嘅網址.onrender.com 你嘅示範密碼
+```
+
+會產生三個檔案：`demo-qr.png`（淨網址）、`demo-qr-login.png`（網址 + 密碼，掃碼即入）、
+`demo-qr.svg`（向量版，放大印刷唔會矇）。
+
+**「掃碼即入」點運作**：QR 內容係 `網址/#pwd=密碼`。用 hash 而唔用 query string 係刻意嘅 ——
+hash 唔會送去伺服器、唔會出現喺 access log；登入頁讀到之後會自動填入密碼框，
+並且即時用 `history.replaceState` 清走 hash，唔會留喺瀏覽器歷史或網址欄。
+評委掃碼之後只需要撳一下「開始示範」。
+
+> ⚠ `demo-qr-login.png` 等同把密碼公開，所以已經加入 `.gitignore`，
+> 唔會俾你誤推上 GitHub。只喺課室／組員之間分享。
+
+> 呢個工具需要 `qrcode` 模組，但**本專案刻意零 npm 依賴**，
+> 所以要裝喺一個獨立目錄（同樣已加入 `.gitignore`）：
+> ```bash
+> mkdir _qrtool && cd _qrtool && npm install qrcode --prefix .
+> ```
 
 ### 點解同時有 smoke-flow 同 smoke-app-flow
 

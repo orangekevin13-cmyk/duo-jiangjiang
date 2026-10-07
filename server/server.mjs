@@ -192,15 +192,36 @@ function loginPage(error = '') {
            padding:14px; cursor:pointer; }
   button:active { transform:translateY(4px); border-bottom-width:0; }
   .err { background:#ffe3e3; color:#cc3b3b; border-radius:12px; padding:9px; font-size:12px; font-weight:800; margin-bottom:12px; }
+  .hint2 { font-size:11.5px; color:#3f7a02; background:#dbf8c5; border-radius:10px; padding:8px; margin:0 0 12px; font-weight:800; }
 </style></head><body>
   <form class="card" method="POST" action="/login">
     <div style="font-size:44px;line-height:1">🦉</div>
     <h1>Duo 講講</h1>
     <p>Cantonese SpeakOut Pass · 請輸入示範密碼</p>
     ${error ? `<div class="err">${error}</div>` : ''}
-    <input type="password" name="password" placeholder="Demo password" autofocus autocomplete="current-password" />
+    <div class="hint2" id="prefillHint" hidden>已從 QR code 讀到密碼，撳「開始示範」就得</div>
+    <input type="password" name="password" id="pwdInput" placeholder="Demo password" autofocus autocomplete="current-password" />
     <button type="submit">開始示範</button>
   </form>
+  <script>
+    /* 如果係由 QR code 掃入嚟（網址帶 #pwd=...），自動填入密碼，
+       評委就只需要撳一下「開始示範」。
+       用 DOM API 賦值而唔係把值插入 HTML，避免任何注入問題；
+       hash 唔會送去伺服器，亦唔會出現喺 server log。 */
+    (function () {
+      var m = /(?:^|[#&])pwd=([^&]*)/.exec(location.hash || '');
+      if (!m) return;
+      var pwd;
+      try { pwd = decodeURIComponent(m[1]); } catch (e) { return; }
+      if (!pwd) return;
+      var input = document.getElementById('pwdInput');
+      var hint = document.getElementById('prefillHint');
+      if (input) input.value = pwd;
+      if (hint) hint.hidden = false;
+      // 清走 hash，免得密碼留喺瀏覽器歷史或者俾人由網址欄睇到
+      if (history.replaceState) history.replaceState(null, '', location.pathname);
+    })();
+  </script>
 </body></html>`;
 }
 

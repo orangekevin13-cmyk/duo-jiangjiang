@@ -8,6 +8,14 @@
 **/.dsh/
 
 node_modules
+# QR 產生工具嘅獨立依賴目錄（本專案刻意零 npm 依賴，呢個係工具用嘅）
+_qrtool/
+
+# QR code 圖檔：demo-qr-login.png 內容包含示範密碼，
+# 推上 GitHub 就等於公開密碼。用 scripts/make-qr.mjs 自己產生就得。
+demo-qr*.png
+demo-qr*.svg
+
 npm-debug.log*
 
 # 臨時診斷檔案
