@@ -61,6 +61,9 @@ const state = {
   nearbySpots: null,
   missionPanel: null,
   techOpen: false, // 技術面板抽屜：預設收起，正式演示唔會見到
+  // 一個場景可能一次送幾個 panel，一次只顯示一個，其餘排隊等用戶推進
+  panelQueue: [],
+  showingPanel: false,
 };
 
 /* ---------------------------------------------------------------- *
@@ -211,12 +214,35 @@ function stepForPanel(panel) {
   return 'idle';
 }
 
+/**
+ * Panel 顯示佇列。
+ *
+ * 一個場景可能一次過送幾個 panel（例如 lesson-complete 會送「任務地圖」再送「任務卡」）。
+ * 如果全部即刻 render，後面嗰個會蓋掉前面嗰個 —— 用戶只會見到最後一版，
+ * 中間嘅畫面一閃而過（實際發生過：地圖只顯示 140ms）。
+ *
+ * 所以規矩係：一次只顯示一個 panel，其餘排隊，等用戶撳掣推進。
+ */
 function applyPanel(panel) {
+  // 快取一定要喺排隊之前做：排隊嗰個 panel 未經 showPanel，
+  // 如果等到顯示先快取，用戶撳「睇任務卡」之前 missionPanel 會係 null。
+  if (panel.type === 'spots') state.nearbySpots = panel.data;
+  if (panel.type === 'mission') state.missionPanel = panel.data;
+
+  if (state.showingPanel) {
+    state.panelQueue.push(panel);
+    return;
+  }
+  showPanel(panel);
+}
+
+/** 真正把一個 panel 放上螢幕 */
+function showPanel(panel) {
+  state.showingPanel = true;
   state.panel = panel;
   state.step = stepForPanel(panel);
 
-  // 任務地圖同任務卡係同一次 lesson-complete 出嘅兩個視圖，兩邊都要留住，
-  // 令學員可以喺地圖與任務卡之間來回睇。
+  // 任務地圖同任務卡係兩個視圖，兩邊都要留住，令學員可以來回睇
   if (panel.type === 'spots') state.nearbySpots = panel.data;
   if (panel.type === 'mission') state.missionPanel = panel.data;
 
@@ -242,6 +268,20 @@ function applyPanel(panel) {
   renderAction();
   renderSide();
   renderChromeStats();
+}
+
+/**
+ * 顯示佇列入面下一個 panel（如果冇就釋放鎖）。
+ * 用戶撳「睇任務卡」時呼叫，令地圖同任務卡成為兩個可以由用戶控制嘅步驟。
+ */
+function advancePanelQueue() {
+  const next = state.panelQueue.shift();
+  if (next) {
+    state.showingPanel = false;
+    showPanel(next);
+  } else {
+    state.showingPanel = false;
+  }
 }
 
 function loadGeo(merchantId) {
@@ -674,12 +714,18 @@ function renderAction() {
 async function onMainAction() {
   if (state.busy) return;
   const fn = $('mainAction').dataset.fn;
-  if (fn === 'start') return runScenario('lesson-complete', { lessonId: 'L-01' });
+  if (fn === 'start') {
+    state.panelQueue = [];
+    state.showingPanel = false;
+    return runScenario('lesson-complete', { lessonId: 'L-01' });
+  }
   if (fn === 'seeMission') {
-    state.panel = { type: 'mission', data: state.missionPanel };
-    state.step = 'mission';
-    renderScreen();
-    renderAction();
+    // 任務卡係地圖之後嘅下一個 panel，由佇列交棒；若佇列空就直接顯示已快取嘅版本
+    if (state.panelQueue.length) {
+      advancePanelQueue();
+    } else if (state.missionPanel) {
+      showPanel({ type: 'mission', data: state.missionPanel });
+    }
     return;
   }
   if (fn === 'prerun') return runScenario('prerun', {});
@@ -1377,6 +1423,8 @@ if ($('btnReset'))
     state.gpsScenario = 'arrived';
     state.nearbySpots = null;
     state.missionPanel = null;
+    state.panelQueue = [];
+    state.showingPanel = false;
     await api.reset();
     state.server = await api.state();
     if ($('timeline')) {
