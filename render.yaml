@@ -38,19 +38,21 @@ services:
       # Render 需要服務綁定所有介面，否則平台連唔到
       - key: HOST
         value: 0.0.0.0
-      # 你揀咗真實模型。冇設 DEEPSEEK_API_KEY 時會自動降級做 mock，
-      # 而且啟動 log 會大聲警告，唔會靜靜地唔知。
+      # 離線確定性引擎：零成本、零等待、每次結果一致。
+      # 工具調用、地理圍欄判定、動態碼核銷、City Stamp 獎勵全部照跑，
+      # 只有文案由模板生成而唔係模型生成 —— 對評委嚟講過程一樣睇得到。
+      # 想示範真實模型，先改做 live，同時把 LIVE_ALLOWED 改成 "1"。
       - key: DEMO_MODE
-        value: live
-      # 成本保險絲：改成 "0" 就即刻停用收費模型（唔需要重新部署，Render 會自動重啟）。
-      # 演示期完結後建議設 "0"，網址就算流出都唔會再產生成本。
+        value: mock
+      # 成本保險絲：只有 "1" 才會呼叫收費模型。
+      # 保持 "0"，就算 DEMO_MODE 被改成 live 都唔會產生費用。
       - key: LIVE_ALLOWED
-        value: "1"
-      # 限流係你嘅成本閘門。免費層單一 instance，一次跑唔到太多並發，所以呢個數唔宜太大。
+        value: "0"
+      # mock 模式即時回應，所以可以放寬限流；如果改用 live，應該收窄（例如 6）
       - key: RATE_PER_MIN
-        value: "12"
+        value: "40"
       - key: GLOBAL_CONCURRENCY
-        value: "3"
+        value: "6"
       - key: SESSION_TTL_MINUTES
         value: "90"
       # 示範密碼：喺 Render 介面填（sync: false 表示唔會入 git）

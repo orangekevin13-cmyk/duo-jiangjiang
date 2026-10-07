@@ -1,10 +1,15 @@
 # 部署指南 · 把 Duo 講講 放上一個長期在線嘅網址
 
-**你揀咗：Render 免費層 ＋ 真實模型（live）。**
+**部署設定：Render 免費層 ＋ 離線 Mock 模式（零成本、零等待）。**
 本項目零 npm 依賴（只用 Node 內建模組），冷啟動即時，所以部署好簡單 —— 但要留意下面兩節。
 
-> 如果你想改用 Fly.io（可以完全唔休眠、有香港節點），睇附錄 A1。
-> 如果只係想兩分鐘出一條臨時網址，睇附錄 A2。
+> 點解預設係 Mock 而唔係真實模型？因為呢個網址係俾老師評委**自己打開**嘅，一定會流傳。
+> Mock 模式嘅工具調用、地理圍欄判定、動態碼核銷、City Stamp 獎勵**全部照跑**，
+> 只有文案由模板生成 —— 過程一樣睇得到，但每位訪客都係即時回應，而且零成本。
+> 想示範真實模型，睇第 6.3 節（臨時開啟，示範完改返）。
+
+> 想改用 Fly.io（可以完全唔休眠、有香港節點），睇附錄 A1。
+> 想兩分鐘出一條臨時網址，睇附錄 A2。
 
 ---
 
@@ -19,20 +24,26 @@
 Render 免費層預設就係一部，所以**唔好加 instance，亦唔好開 autoscaling**。
 如果之後真係要水平擴展，必須先把會話搬去 Redis 之類嘅共享存儲。
 
-### 規則二：live 模式即係「任何人拿到網址都可以燒你嘅錢」
+### 規則二：預設保持 Mock，真實模型要主動開
 
-| 方案 | 老師會睇到咩 | 你嘅成本 | 風險 |
+| 方案 | 老師會睇到咩 | 每位訪客嘅等待 | 你嘅成本 |
 |---|---|---|---|
-| 離線 Mock | 6 個場景、工具調用、圍欄判定、動態碼核銷、City Stamp —— **全部照跑**，只有文案由模板生成 | **¥0** | 幾乎冇 |
-| **真實模型 live（你揀咗呢個）** | 同上，但文案由 `deepseek-flash` 即時生成 | 每次完整演示約 **¥0.1–0.3** | 網址一旦流出（貼群、被搜尋引擎收錄），**陌生人會不停燒你嘅額度** |
+| **離線 Mock（預設）** | 6 個場景、工具調用、圍欄判定、動態碼核銷、City Stamp —— **全部照跑**，只有文案由模板生成 | **即時**（每個場景約 0.15 秒） | **¥0** |
+| 真實模型 live | 同上，但文案由 `deepseek-flash` 即時生成 | 每個場景 8–20 秒 | 每次完整演示約 **¥0.1–0.3** |
 
-值得留意：呢個演示嘅核心價值 —— 「工具調用真實發生、驗證判定唔可以造假、獎勵計法一致」——
-喺 Mock 模式下**一模一樣**，因為判定同獎勵都係同一套純函數（`tools.mjs` / `store.mjs`），
-Mock 只換走咗「模型寫文案」嗰一層。時間線、工具入參返回值、失敗路徑，全部都係真嘅。
+三個理由支持保持 Mock：
 
-**`LIVE_ALLOWED` 就係你嘅保險絲**：設成 `"0"` 之後，即使 `DEMO_MODE` 仍然係 `live`、
-即使訪客自己喺介面撳「live」開關，服務器都**絕對唔會**呼叫收費模型。
-所以「忘記切換」最壞情況係介面顯示 live 但實際行 mock，唔會產生費用。
+1. **唔會撞限流**。真實模型每個場景要 8–20 秒，多位評委同時開就好容易排隊或者觸發併發上限；
+   Mock 模式約 0.15 秒完成，同一部免費層機器可以從容應付。
+2. **零成本、無上限風險**。網址一旦流出（貼群、被搜尋引擎收錄、同學轉發），
+   live 模式會不停燒你嘅額度，Mock 就完全冇呢個問題。
+3. **演示效果一樣**。呢個方案嘅核心價值係「工具調用真實發生、驗證判定唔可以造假、獎勵計法一致」，
+   而 Mock 模式用嘅係**同一套純函數**（`tools.mjs` / `store.mjs`），
+   時間線、工具入參返回值、失敗路徑全部都係真嘅，只有文案換成模板。
+
+**雙重保險**：`DEMO_MODE=mock` 係第一道，`LIVE_ALLOWED=0` 係第二道。
+即使有人把 `DEMO_MODE` 改成 `live`，只要 `LIVE_ALLOWED` 仍然係 `"0"`，
+服務器就**絕對唔會**呼叫收費模型 —— 介面會誠實顯示實際執行模式係 `mock`。
 
 ---
 
@@ -102,19 +113,28 @@ curl $APP/healthz
 curl -s -o /dev/null -w "%{http_code}\n" $APP/api/state
 # 期望：401
 
-# 3) 確認真係行緊 live，而唔係靜靜降級咗
+# 3) 確認模式（呢個係最緊要嘅一步）
 curl -s -H "x-demo-password: 你嘅示範密碼" $APP/api/state \
-  | grep -o '"effective_mode":"[a-z]*"\|"live_ready":[a-z]*'
-# 期望："effective_mode":"live" 同 "live_ready":true
-# ⚠ 如果回 mock → 即係 DEEPSEEK_API_KEY 冇設成功，去 Render 介面嘅 Environment 檢查
+  | grep -o '"mode":"[a-z]*"\|"effective_mode":"[a-z]*"\|"live_ready":[a-z]*'
+# 期望（Mock 部署）："mode":"mock" 同 "effective_mode":"mock"
+# 如果 effective_mode 係 live 但你唔想燒錢 → 去 Render 嘅 Environment 把 LIVE_ALLOWED 改成 "0"
 
 # 4) 多訪客隔離 —— 呢個係 hosted 演示最容易出事嘅地方
 BASE=$APP DEMO_PASSWORD=你嘅示範密碼 node scripts/smoke-session.mjs
 # 期望：32 項全過，特別係「A 按重置唔會清空 B」
 ```
 
-第 3 步特別重要：**`effective_mode` 係服務器實際會執行嘅模式**，唔係你填嘅偏好。
-如果 Key 打錯或者過期，佢會老實顯示 `mock`，你唔會喺評委面前才發現。
+**`effective_mode` 係服務器實際會執行嘅模式**，唔係設定檔寫嘅偏好。
+呢個欄位存在嘅原因：如果 `DEEPSEEK_API_KEY` 打錯、或者 `LIVE_ALLOWED=0` 鎖住咗，
+介面同 API 都會老實顯示 `mock`，你唔會喺評委面前才發現「點解咁慢／點解扣咗錢」。
+
+**驗證反應速度**（Mock 部署應該係即時）：
+
+```bash
+time curl -s -H "x-demo-password: 你嘅示範密碼" -X POST $APP/api/scenario/lesson-complete \
+  -H 'content-type: application/json' -d '{"lessonId":"L-01","__stream":"0"}' -o /dev/null
+# Mock：應該 ~0.2 秒。如果超過 3 秒，即係實際行緊 live，去檢查 LIVE_ALLOWED
+```
 
 ---
 
@@ -145,33 +165,54 @@ Render 免費層**閒置 15 分鐘會休眠**。老師第一次打開要等約 3
 
 ---
 
-## 6. 成本控制（live 模式必做）
+## 6. 模式與成本控制
 
-### 6.1 睇實用量
+### 6.1 目前預設：Mock（零成本）
 
-- **DeepSeek 控制台**：睇每日用量同餘額，設定告警
-- **Render 介面**：Metrics 睇請求量
-- **演示介面右上角**：每次場景完成會顯示 token 用量
-- **服務器 log**：Render → Logs
+`render.yaml` 已經設定 `DEMO_MODE=mock`、`LIVE_ALLOWED=0`，所以**唔需要做任何嘢就係零成本**。
+如果想確認有冇意外產生費用：
 
-### 6.2 三個旋鈕
+- **DeepSeek 控制台**：睇每日用量同餘額（Mock 模式下應該完全冇增長）
+- **`curl` 檢查 `effective_mode`**：見第 4 節第 3 步
+- **Render 介面**：Metrics 睇請求量；Logs 睇有冇模型調用記錄
+
+### 6.2 想示範真實模型（臨時開啟）
+
+去 Render → 你嘅 service → **Environment**，改兩個值：
+
+| 變數 | 改成 | 說明 |
+|---|---|---|
+| `LIVE_ALLOWED` | `1` | 解開成本保險絲 |
+| `DEMO_MODE` | `live` | 新訪客預設用真實模型 |
+| `DEEPSEEK_API_KEY` | `sk-...` | 如果未設過就要設 |
+| `RATE_PER_MIN` | `6` | **建議同時收窄**，作成本閘門（live 每個場景 8–20 秒，訪客亦唔想等） |
+
+Save 之後自動重啟（約 1 分鐘）。用第 4 節嘅 `curl` 確認 `effective_mode` 變成 `live`。
+
+### 6.3 示範完即刻關返（最重要嘅一步）
+
+```bash
+# Render 介面改，或直接用 CLI（如果裝咗）
+fly secrets set DEMO_MODE=mock LIVE_ALLOWED=0     # Fly.io
+```
+
+Render 就係去 **Environment** 把 `LIVE_ALLOWED` 改回 `0`、`DEMO_MODE` 改回 `mock` → Save。
+
+之後訪客一樣睇到完整 6 個場景（工具調用、判定、獎勵全部照跑），但模型唔會被呼叫，
+**成本即刻變 ¥0**。介面會誠實顯示 `mock`，唔會呃人。
+
+> **保險絲獨立於模式**：`LIVE_ALLOWED=0` 就算 `DEMO_MODE` 仍然係 `live` 都會生效，
+> 所以「忘記切換」嘅最壞情況係介面顯示 mock 但實際都係 mock，唔會產生費用。
+
+### 6.4 其他旋鈕
 
 | 旋鈕 | 位置 | 建議 |
 |---|---|---|
-| `RATE_PER_MIN` | `render.yaml` `envVars` | 已預設 12（免費層單機，唔宜太大）。想更保守改 6 |
-| `GLOBAL_CONCURRENCY` | 同上 | 已預設 3。想更保守改 2 |
+| `RATE_PER_MIN` | `render.yaml` `envVars` | Mock 已預設 40（即時回應，可以放寬）；live 應該收窄到 6 |
+| `GLOBAL_CONCURRENCY` | 同上 | Mock 已預設 6；live 應該收窄到 2–3 |
 | `DEMO_PASSWORD` | Render 介面 secret | 定期換；換完舊 cookie 即刻失效 |
 
 改 `render.yaml` 要重新部署；改 secret 喺 Render 介面改完會自動重啟。
-
-### 6.3 演示完即刻關掉成本（最重要嘅一步）
-
-去 Render → 你嘅 service → **Environment** → 把 `LIVE_ALLOWED` 改成 `0` → Save。
-
-Render 會自動重啟。之後：訪客一樣睇到完整 6 個場景（工具調用、判定、獎勵全部照跑），
-但模型唔會被呼叫，**成本即刻變 ¥0**。介面會顯示 `mock`，唔會呃人。
-
-想再開返：把 `LIVE_ALLOWED` 改返 `1`。
 
 > 更徹底嘅做法係連 `DEMO_MODE` 都改成 `mock`，雙重保險。
 
@@ -184,12 +225,15 @@ Render 會自動重啟。之後：訪客一樣睇到完整 6 個場景（工具�
 | `HOST` | `127.0.0.1` | 綁定地址。**Render 必須 `0.0.0.0`**（`render.yaml` 已設） |
 | `PORT` | `8710` | 端口。Render 會自己注入，代碼會讀 |
 | `DEMO_PASSWORD` | 空 | **設咗就開啟密碼保護**。開放去公網必須設 |
-| `DEMO_MODE` | `auto` | 新訪客嘅預設模式：`auto` / `live` / `mock` |
-| `LIVE_ALLOWED` | `1` | `0` = **即使有 Key 都唔會呼叫收費模型**（成本保險絲） |
-| `RATE_PER_MIN` | `20` | 每位訪客每分鐘最多跑幾多個場景 |
+| `DEMO_MODE` | **`mock`** | 新訪客嘅預設模式：`mock` / `auto` / `live`。**預設 mock 係刻意嘅**（見第 0 節規則二） |
+| `LIVE_ALLOWED` | `1` | `0` = **即使有 Key 都唔會呼叫收費模型**（成本保險絲，獨立於 `DEMO_MODE`） |
+| `RATE_PER_MIN` | `20` | 每位訪客每分鐘最多跑幾多個場景（mock 可以放寬，live 應該收窄） |
 | `GLOBAL_CONCURRENCY` | `4` | 同時最多幾個場景在跑 |
 | `SESSION_TTL_MINUTES` | `90` | 訪客無活動幾久之後回收會話 |
-| `DEEPSEEK_API_KEY` | 空 | live 模式必須 |
+| `DEEPSEEK_API_KEY` | 空 | 只有 `DEMO_MODE=live` 或 `auto` 先需要 |
+
+> **本機演示想用真實模型**：`node server/server.mjs --live`
+> （`--live` 係明確嘅本機選擇；部署預設仍然係 mock，兩者互不影響。）
 
 ---
 

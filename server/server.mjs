@@ -33,14 +33,26 @@ const IS_PUBLIC = HOST !== '127.0.0.1' && HOST !== 'localhost';
  *   DEMO_PASSWORD   shared password for a hosted demo. Also accepts a full URL:
  *                   DEMO_PASSWORD=https://duo.example.com/?k=SECRET
  *                   (the password is asked for once, then stored in a cookie)
- *   DEMO_MODE       default model mode for new sessions: auto | live | mock
+ *   DEMO_MODE       default model mode for new sessions: mock | auto | live
+ *                   Defaults to **mock** — see note below.
  *   LIVE_ALLOWED    0 = never call the paid model, even if a key exists (recommended when public)
  *   RATE_PER_MIN    max scenario runs per client per minute (default 20)
  *   GLOBAL_CONCURRENCY  max scenario runs in flight at once (default 4)
+ *
+ * WHY THE DEFAULT IS mock AND NOT auto:
+ *   This demo is meant to be opened by other people (teachers, judges, classmates) on a URL that
+ *   will get forwarded around. If the default were `auto`, every first-time visitor would trigger
+ *   real paid model calls — slow for them (10-30s per step) and unbounded cost for the owner.
+ *   Mock mode runs the *same* tools, the same geofence/code verification and the same reward
+ *   maths; only the wording comes from templates instead of the model. So it is fast,
+ *   deterministic, free, and still an honest demo of the mechanism.
+ *   To demonstrate the real model, opt in explicitly with DEMO_MODE=live (or --live locally).
  */
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD || '';
 const AUTH_REQUIRED = Boolean(DEMO_PASSWORD);
-const DEFAULT_MODE = process.env.DEMO_MODE || (process.argv.includes('--mock') ? 'mock' : process.argv.includes('--live') ? 'live' : 'auto');
+const DEFAULT_MODE =
+  process.env.DEMO_MODE ||
+  (process.argv.includes('--mock') ? 'mock' : process.argv.includes('--live') ? 'live' : 'mock');
 const LIVE_ALLOWED = process.env.LIVE_ALLOWED !== '0';
 const RATE_PER_MIN = Number(process.env.RATE_PER_MIN || 20);
 const GLOBAL_CONCURRENCY = Number(process.env.GLOBAL_CONCURRENCY || 4);
