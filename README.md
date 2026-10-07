@@ -164,16 +164,33 @@ DeepSeek 嘅 `response_format=json_object` 同 `tool_calls` 同時開啟時，�
 | [DUOLINGO_VISUAL_SPEC.md](DUOLINGO_VISUAL_SPEC.md) | 品牌視覺規範（配色 / 字體 / 形狀 / 動效 / PPT 逐頁對照） |
 | [DEPLOY.md](DEPLOY.md) | **部署指南**：放上長期在線網址（Render / Fly / Docker / 隧道）+ 安全須知 |
 | [Dockerfile](Dockerfile) · [render.yaml](render.yaml) · [fly.toml](fly.toml) | 現成部署設定 |
-| [scripts/smoke-mock.mjs](scripts/smoke-mock.mjs) · [scripts/smoke-http.mjs](scripts/smoke-http.mjs) · [scripts/smoke-live.mjs](scripts/smoke-live.mjs) · [scripts/smoke-session.mjs](scripts/smoke-session.mjs) | 彩排自檢腳本（離線 6 場景 / HTTP+SSE / 真實模型 / 多訪客隔離） |
+| [scripts/smoke-mock.mjs](scripts/smoke-mock.mjs) · [scripts/smoke-flow.mjs](scripts/smoke-flow.mjs) · [scripts/smoke-app-flow.mjs](scripts/smoke-app-flow.mjs) · [scripts/smoke-http.mjs](scripts/smoke-http.mjs) · [scripts/smoke-live.mjs](scripts/smoke-live.mjs) · [scripts/smoke-session.mjs](scripts/smoke-session.mjs) | 彩排自檢腳本（離線契約 / 六場景流程 / 真實前端流程 / HTTP+SSE / 真實模型 / 多訪客隔離） |
 
 彩排前建議各跑一次：
 
 ```bash
-node scripts/smoke-mock.mjs      # 離線：177 項契約 + 品牌一致性檢查，唔需要 API Key
-node scripts/smoke-http.mjs      # 需要先啟動服務；走 HTTP+SSE，驗證前端拿到嘅數據流
-node scripts/smoke-live.mjs      # 直連 DeepSeek，驗證 6 場景 + 失敗路徑（會消耗 token）
-node scripts/smoke-session.mjs   # 多訪客隔離：A 按重置唔會清空 B（部署後必跑）
+node scripts/smoke-mock.mjs       # 離線：196 項契約 + 品牌一致性檢查，唔需要 API Key
+node scripts/smoke-flow.mjs       # 六場景連續推進 + 失敗重試（27 項）
+node scripts/smoke-app-flow.mjs   # 直接執行 public/app.js 嘅真實流程（17 項）★ 需要服務在跑
+node scripts/smoke-http.mjs       # 走 HTTP+SSE，驗證前端拿到嘅數據流
+node scripts/smoke-session.mjs    # 多訪客隔離：A 按重置唔會清空 B（部署後必跑）
+node scripts/smoke-live.mjs       # 直連 DeepSeek，驗證 6 場景 + 失敗路徑（會消耗 token）
 ```
+
+> ⚠ **限流**：伺服器每位訪客每分鐘最多 20 次場景調用（`RATE_PER_MIN`）。
+> `smoke-http.mjs`、`smoke-app-flow.mjs`、`smoke-session.mjs` 都會快速連續打 API，
+> **連續跑多個套件會撞到 429**，症狀係場景全部回 `undefined`。
+> 唔係程式有問題 —— 等 60 秒再跑，或者用 `RATE_PER_MIN=200` 重啟服務。
+
+### 點解同時有 smoke-flow 同 smoke-app-flow
+
+`smoke-flow.mjs` 用自己寫嘅同源邏輯模擬前端；`smoke-app-flow.mjs` **直接執行 `public/app.js`**
+（提供最小 DOM stub）。呢個分別好重要，因為真實出現過一個 bug：
+app.js 收到 SSE `panel` 事件時只送去時間線、冇送去 `applyPanel`，
+令「任務地圖」永遠上唔到螢幕 —— 而 `smoke-flow.mjs` 因為自己「正確地」apply 咗每個 panel 事件，
+所以 27 項全過，但真實瀏覽器完全睇唔到地圖。
+
+**教訓：測試唔應該比被測程式碼更正確。** 涉及畫面流程嘅改動，兩套都要跑。
 
 ---
 

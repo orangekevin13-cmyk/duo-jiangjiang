@@ -207,6 +207,13 @@ async function runScenario(name, input = {}) {
         if (p.warning) enqueue({ type: 'notice', level: 'warn', text: `真實模型調用失敗，已降級 Mock：${p.warning}` });
         enqueue({ type: 'done', payload: p });
       } else {
+        // 關鍵：SSE 嘅 panel 事件一定要送去 applyPanel。
+        // 伺服器係「多個 panel 走 SSE、最後一個 panel 放喺 done payload」，
+        // 例如 lesson-complete 嘅任務地圖（spots）只會經 SSE 送出。
+        // 如果呢度唔 apply，只有 done payload 嗰個 panel 會上螢幕，
+        // 任務地圖就永遠唔會出現（呢個 bug 真係發生過，而且測試抓唔到，
+        // 因為測試框架自己有正確咁 apply 每個 panel 事件）。
+        if (ev.type === 'panel' && ev.panel) applyPanel(ev.panel);
         enqueue(ev);
       }
     });
@@ -709,7 +716,9 @@ function renderAction() {
       : '';
   bar.innerHTML =
     `<button class="btn primary" id="mainAction" data-fn="${action.fn}" ${disabled}>${spinner}${action.label}</button>` + back;
-  $('mainAction').addEventListener('click', onMainAction);
+  // 用 ?. 係因為某些時序下（例如測試環境、或者 DOM 未準備好）mainAction 可能未存在，
+  // 唔應該因此拋錯並令整個 renderAction 連帶後續流程一齊死。
+  $('mainAction')?.addEventListener('click', onMainAction);
   const backBtn = $('backToMap');
   if (backBtn)
     backBtn.addEventListener('click', () => {
@@ -726,6 +735,8 @@ async function onMainAction() {
   if (fn === 'start') {
     state.panelQueue = [];
     state.showingPanel = false;
+    // 一定要清掉「已收起」標記，否則第二次跑課後頁就唔會再彈地圖
+    state.mapDismissed = false;
     return runScenario('lesson-complete', { lessonId: 'L-01' });
   }
   if (fn === 'seeMission') {
@@ -1089,9 +1100,10 @@ function openMissionMap(s) {
       <div class="s-mapbox mission-map">${spotsMapSvg(s)}</div>
 
       <div class="map-legend">
-        <span><i class="dot you"></i>你</span>
-        <span><i class="dot rec"></i>任務地點</span>
-        <span><i class="dot other"></i>其他 Friendly Spot</span>
+        <span><i class="pin-dot done"></i>已完成 Unlocked</span>
+        <span><i class="pin-dot new"></i>新任務 New mission</span>
+        <span><i class="pin-dot locked"></i>未解鎖 Locked</span>
+        <span><i class="pin-dot you"></i>你 You</span>
       </div>
 
       ${
@@ -1128,96 +1140,284 @@ function openMissionMap(s) {
   });
 }
 
+/* ================================================================
+ * 實景風格城市地圖（Duolingo 學習路徑嘅城市版）
+ *
+ * 參照 Duolingo 嘅地圖頁：手繪地標 + 圖釘標記 + 底部分類圖例。
+ * 香港地標用簡化插畫畫（鐘樓、會展、中銀、IFC、山頂、天星小輪），
+ * 每個任務點有狀態：✅ 已完成 / ⭐ 新任務 / 🔒 未解鎖。
+ * ================================================================ */
+
 /**
- * 任務地圖：學員位置 + 附近所有 Friendly Spot，推薦嗰間高亮。
- * 用真實經緯度畫，比例忠實 —— 唔係裝飾圖，距離感同 verify_location 一致。
+ * 手繪地標插畫：全部原創簡化圖形，唔係任何品牌素材。
+ * 每個地標都有真實經緯度（見 HK_PLACES），同任務點共用同一套投影，
+ * 所以地標同圖釘嘅相對位置係忠實嘅 —— 「你」亦一定會落喺陸地上。
  */
-function spotsMapSvg(s, w = 390, h = 260) {
+const HK_LANDMARKS = {
+  // 尖沙咀鐘樓
+  clocktower: (x, y, sc = 1) => `
+    <g transform="translate(${x},${y}) scale(${sc})">
+      <rect x="-9" y="-30" width="18" height="34" rx="2" fill="#e8c9a0" stroke="#c9a473" stroke-width="1.2"/>
+      <rect x="-11" y="-38" width="22" height="9" rx="2" fill="#d8b184" stroke="#c9a473" stroke-width="1.2"/>
+      <path d="M-11 -38 L0 -48 L11 -38 Z" fill="#c98f5a"/>
+      <rect x="-5" y="-26" width="10" height="10" rx="1.5" fill="#fff" stroke="#c9a473" stroke-width="1"/>
+      <path d="M-1.6 -24 h3.2 v3 h-3.2z" fill="#8a6a45"/>
+      <rect x="-14" y="4" width="28" height="5" rx="2" fill="#d8c3a5"/>
+      <circle cx="0" cy="-44" r="1.8" fill="#c98f5a"/>
+    </g>`,
+  // 會展中心（弧形屋頂）
+  hkcec: (x, y, sc = 1) => `
+    <g transform="translate(${x},${y}) scale(${sc})">
+      <path d="M-22 2 Q0 -22 22 2 Z" fill="#dfe9f2" stroke="#a9c0d4" stroke-width="1.2"/>
+      <path d="M-22 2 Q0 -12 22 2 Z" fill="#c7d8e6"/>
+      <rect x="-22" y="2" width="44" height="7" rx="2" fill="#b6c9da" stroke="#a9c0d4" stroke-width="1"/>
+      <path d="M-3 -14 L0 -20 L3 -14" fill="none" stroke="#9db6cc" stroke-width="1.2"/>
+    </g>`,
+  // 中銀大廈（三角幾何）
+  boc: (x, y, sc = 1) => `
+    <g transform="translate(${x},${y}) scale(${sc})">
+      <path d="M0 -46 L7 4 L-7 4 Z" fill="#cfe0ee" stroke="#9db6cc" stroke-width="1.2"/>
+      <path d="M0 -46 L7 4 L0 4 Z" fill="#b9d0e2"/>
+      <path d="M-9 -12 L9 -12 M-7 -24 L7 -24 M-5 -34 L5 -34" stroke="#9db6cc" stroke-width="0.9"/>
+      <rect x="-10" y="3" width="20" height="4" rx="1.5" fill="#a9c0d4"/>
+    </g>`,
+  // IFC 國際金融中心（圓角高塔）
+  ifc: (x, y, sc = 1) => `
+    <g transform="translate(${x},${y}) scale(${sc})">
+      <path d="M-8 4 L-6 -42 Q0 -48 6 -42 L8 4 Z" fill="#dbe8f3" stroke="#a9c0d4" stroke-width="1.2"/>
+      <path d="M-8 4 L-6 -42 Q0 -48 1 -46 L1 4 Z" fill="#c5d9e9"/>
+      <path d="M-4 -30 L6 -30 M-4 -18 L6 -18 M-4 -6 L6 -6" stroke="#b0c8dc" stroke-width="0.9"/>
+    </g>`,
+  // 山頂（纜車 + 山）
+  peak: (x, y, sc = 1) => `
+    <g transform="translate(${x},${y}) scale(${sc})">
+      <path d="M-30 6 Q-14 -20 0 -12 Q12 -22 28 6 Z" fill="#a9c98a" stroke="#8fb271" stroke-width="1.2"/>
+      <path d="M-30 6 Q-14 -12 0 -4 Q12 -14 28 6 Z" fill="#93b877"/>
+      <rect x="-3" y="-30" width="6" height="10" rx="1.5" fill="#dcc7a8" stroke="#b9a184" stroke-width="1"/>
+      <path d="M-4 -30 L0 -34 L4 -30 Z" fill="#c98f5a"/>
+      <path d="M-26 -6 L-4 -22 M4 -22 L24 -6" stroke="#8aa8c4" stroke-width="1" stroke-dasharray="3 2"/>
+    </g>`,
+  // 天星小輪
+  ferry: (x, y, sc = 1) => `
+    <g transform="translate(${x},${y}) scale(${sc})">
+      <path d="M-16 0 L16 0 L12 7 L-12 7 Z" fill="#3f7a02"/>
+      <rect x="-11" y="-7" width="22" height="7" rx="1.5" fill="#f2f7ea" stroke="#c9d8b8" stroke-width="1"/>
+      <rect x="-6" y="-12" width="12" height="5" rx="1.5" fill="#e4eed6" stroke="#c9d8b8" stroke-width="1"/>
+      <rect x="-3" y="-19" width="2.5" height="7" fill="#c98f5a"/>
+      <circle cx="0" cy="-20" r="1.6" fill="#ffc800"/>
+    </g>`,
+  // 茶餐廳（霓虹招牌）
+  chaachaan: (x, y, sc = 1) => `
+    <g transform="translate(${x},${y}) scale(${sc})">
+      <rect x="-15" y="-14" width="30" height="18" rx="2" fill="#f0dcbe" stroke="#cbb08a" stroke-width="1.2"/>
+      <rect x="-13" y="-20" width="26" height="7" rx="1.5" fill="#ff7a7a" stroke="#e05a5a" stroke-width="1"/>
+      <path d="M-9 -16.5 h6 M1 -16.5 h6" stroke="#fff" stroke-width="1.6"/>
+      <rect x="-9" y="-6" width="7" height="10" rx="1" fill="#8a6a45"/>
+      <rect x="3" y="-8" width="9" height="6" rx="1" fill="#bfe0f5" stroke="#9dc4de" stroke-width="0.8"/>
+    </g>`,
+  // 咖啡店
+  cafe: (x, y, sc = 1) => `
+    <g transform="translate(${x},${y}) scale(${sc})">
+      <rect x="-14" y="-13" width="28" height="17" rx="2" fill="#f5e6d3" stroke="#d0b494" stroke-width="1.2"/>
+      <path d="M-14 -13 h28 l-4 -6 h-20 z" fill="#58cc02"/>
+      <circle cx="-6" cy="-16" r="1" fill="#fff"/><circle cx="0" cy="-16" r="1" fill="#fff"/><circle cx="6" cy="-16" r="1" fill="#fff"/>
+      <rect x="-9" y="-5" width="8" height="9" rx="1" fill="#a8834f"/>
+      <rect x="3" y="-7" width="8" height="11" rx="1" fill="#cfe4f2" stroke="#a9c6d8" stroke-width="0.8"/>
+    </g>`,
+  // 便利店
+  store: (x, y, sc = 1) => `
+    <g transform="translate(${x},${y}) scale(${sc})">
+      <rect x="-13" y="-12" width="26" height="16" rx="2" fill="#eef2f6" stroke="#b9c6d2" stroke-width="1.2"/>
+      <rect x="-13" y="-18" width="26" height="7" rx="1.5" fill="#1cb0f6"/>
+      <path d="M-7 -14.5 h5 M0 -14.5 h5" stroke="#fff" stroke-width="1.6"/>
+      <rect x="-10" y="-4" width="20" height="7" rx="1" fill="#cfe4f2" stroke="#a9c6d8" stroke-width="0.8"/>
+    </g>`,
+  // 書店
+  bookshop: (x, y, sc = 1) => `
+    <g transform="translate(${x},${y}) scale(${sc})">
+      <rect x="-14" y="-12" width="28" height="16" rx="2" fill="#efe4f7" stroke="#c3a9d8" stroke-width="1.2"/>
+      <rect x="-14" y="-18" width="28" height="7" rx="1.5" fill="#ce82ff"/>
+      <path d="M-6 -14.5 h12" stroke="#fff" stroke-width="1.6"/>
+      <rect x="-10" y="-4" width="20" height="7" rx="1" fill="#e0d0ee" stroke="#c3a9d8" stroke-width="0.8"/>
+    </g>`,
+};
+
+/**
+ * 香港地標：真實經緯度。同任務點共用同一套投影，
+ * 所以地標、圖釘、「你」嘅相對位置全部一致 —— 唔會出現「你」落喺海中心。
+ */
+const HK_PLACES = [
+  { kind: 'peak', lat: 22.2711, lng: 114.1499, scale: 0.85 }, // 山頂
+  { kind: 'ifc', lat: 22.2850, lng: 114.1590, scale: 0.9 }, // IFC
+  { kind: 'boc', lat: 22.2793, lng: 114.1620, scale: 0.85 }, // 中銀大廈
+  { kind: 'hkcec', lat: 22.2835, lng: 114.1730, scale: 0.9 }, // 會展中心
+  { kind: 'clocktower', lat: 22.2937, lng: 114.1699, scale: 0.9 }, // 尖沙咀鐘樓
+  { kind: 'ferry', lat: 22.2930, lng: 114.1680, scale: 0.85 }, // 天星小輪（尖沙咀）
+  { kind: 'ferry', lat: 22.2870, lng: 114.1620, scale: 0.7 }, // 天星小輪（中環）
+  { kind: 'chaachaan', lat: 22.2880, lng: 114.1460, scale: 0.85 }, // 茶餐廳（西營盤一帶）
+];
+
+/** 任務點狀態：new（本次任務）/ done（已完成）/ locked（未解鎖） */
+function pinState(sp) {
+  if (sp.recommended) return 'new';
+  return sp.unlocked ? 'done' : 'locked';
+}
+
+/**
+ * 任務地圖：實景風格城市插畫 + 任務點。
+ *
+ * 所有元素（地標、圖釘、學員位置）都用同一套經緯度投影，
+ * 所以相對位置忠實 —— 距離感同 verify_location 嘅判定一致。
+ * 海港位置亦由真實緯度推算，唔會出現「你」浮喺海上。
+ */
+function spotsMapSvg(s, w = 420, h = 340) {
   const spots = s.spots || [];
   const origin = s.origin;
   if (!origin || !spots.length) {
     return `<svg viewBox="0 0 ${w} ${h}"><text x="${w / 2}" y="${h / 2}" text-anchor="middle" fill="${DUO.hare}" font-size="12">暫無附近地點資料</text></svg>`;
   }
-  const latScale = 111320;
-  const lngScale = 111320 * Math.cos((origin.lat * Math.PI) / 180);
 
-  // 換算成以學員為原點嘅米座標
-  const raw = spots.map((sp) => ({
+  const lngScale = 111320 * Math.cos((origin.lat * Math.PI) / 180);
+  const latScale = 111320;
+
+  const pinsData = spots.map((sp) => ({
     sp,
-    mx: (sp.lng ?? origin.lng) - origin.lng,
-    my: (sp.lat ?? origin.lat) - origin.lat,
+    lat: sp.lat ?? origin.lat,
+    lng: sp.lng ?? origin.lng,
   }));
 
-  // 後端只回距離，未必回座標；用距離＋方位無從得知，所以若缺座標就改用「距離條」畫法
-  const hasCoords = raw.every((r) => Number.isFinite(r.mx) && Number.isFinite(r.my) && (r.mx !== 0 || r.my !== 0));
+  /**
+   * 視窗範圍由「任務本身」決定，唔係把整個香港塞入畫面。
+   * 任務點之間可能只差幾十米（同一間大學內），如果按全港地標定範圍，
+   * 呢啲點會疊成一團；所以先用任務點定出範圍，再擴大到至少涵蓋
+   * 附近幾個地標，令畫面既忠實又睇得清。
+   */
+  const focusLats = [origin.lat, ...pinsData.map((p) => p.lat)];
+  const focusLngs = [origin.lng, ...pinsData.map((p) => p.lng)];
+  const fMinLat = Math.min(...focusLats);
+  const fMaxLat = Math.max(...focusLats);
+  const fMinLng = Math.min(...focusLngs);
+  const fMaxLng = Math.max(...focusLngs);
+  const fCx = (fMinLat + fMaxLat) / 2;
+  const fCy = (fMinLng + fMaxLng) / 2;
+  // 最小視窗（度）：太窄會令地標擠爆，太闊會令任務點變一點
+  const MIN_LAT = 0.026;
+  const MIN_LNG = 0.036;
+  const halfLat = Math.max((fMaxLat - fMinLat) / 2 * 1.5, MIN_LAT / 2);
+  const halfLng = Math.max((fMaxLng - fMinLng) / 2 * 1.5, MIN_LNG / 2);
+  const viewMinLat = fCx - halfLat;
+  const viewMaxLat = fCx + halfLat;
+  const viewMinLng = fCy - halfLng;
+  const viewMaxLng = fCy + halfLng;
 
-  if (!hasCoords) {
-    // 退化畫法：同心圓 + 沿環擺放（按距離排序），一樣睇得出「邊間最近」
-    const maxD = Math.max(...spots.map((sp) => sp.distance_m || 1), 120);
-    const cx = w / 2;
-    const cy = h / 2 + 14;
-    const maxR = Math.min(w, h) / 2 - 30;
-    const sorted = [...spots].sort((a, b) => (a.distance_m || 0) - (b.distance_m || 0));
-    const rings = [0.33, 0.66, 1].map((f) =>
-      `<circle cx="${cx}" cy="${cy}" r="${(maxR * f).toFixed(1)}" fill="none" stroke="${DUO.swan}" stroke-width="1.5" stroke-dasharray="4 4"/>`,
-    );
-    const label = `<text x="${cx}" y="${cy + 5}" text-anchor="middle" font-size="11" font-weight="800" fill="${DUO.orangeDeep || '#cc7a00'}">你</text>`;
-    const dots = sorted
-      .map((sp, i) => {
-        const ang = (-90 + (360 / Math.max(sorted.length, 1)) * i) * (Math.PI / 180);
-        const r = (sp.distance_m / maxD) * maxR;
-        const px = cx + Math.cos(ang) * r;
-        const py = cy + Math.sin(ang) * r;
-        return spotMarker(px, py, sp, sp.recommended, elidedName(sp.name));
-      })
-      .join('');
-    return `<svg viewBox="0 0 ${w} ${h}">
-      <rect x="0" y="0" width="${w}" height="${h}" fill="${DUO.snow}" rx="12"/>
-      ${rings.join('')}
-      <circle cx="${cx}" cy="${cy}" r="7" fill="${DUO.orange}" stroke="#fff" stroke-width="2.5"/>
-      ${label}${dots}
-      <text x="${cx}" y="${h - 6}" text-anchor="middle" font-size="10" font-weight="700" fill="${DUO.hare}">圈 = 距離刻度 · 外圈約 ${Math.round(maxD)}m</text>
-    </svg>`;
-  }
+  const wPad = 26;
+  const hPad = 30;
+  const scale = Math.min(
+    (w - wPad * 2) / ((viewMaxLng - viewMinLng) * lngScale),
+    (h - hPad * 2) / ((viewMaxLat - viewMinLat) * latScale),
+  );
+  const contentW = (viewMaxLng - viewMinLng) * lngScale * scale;
+  const contentH = (viewMaxLat - viewMinLat) * latScale * scale;
+  const ox = (w - contentW) / 2;
+  const oy = (h - contentH) / 2;
 
-  // 正常畫法：真實相對座標
-  const xs = raw.map((r) => r.mx * lngScale);
-  const ys = raw.map((r) => r.my * latScale);
-  const minX = Math.min(0, ...xs);
-  const maxX = Math.max(0, ...xs);
-  const minY = Math.min(0, ...ys);
-  const maxY = Math.max(0, ...ys);
-  const spanX = Math.max(maxX - minX, 80);
-  const spanY = Math.max(maxY - minY, 80);
-  const pad = 42;
-  const scale = Math.min((w - pad * 2) / spanX, (h - pad * 2) / spanY);
-  const toPx = (mx, my) => ({
-    px: pad + (mx * lngScale - minX) * scale,
-    py: h - pad - (my * latScale - minY) * scale, // 北在上：y 軸反轉
+  const toPx = (lat, lng) => ({
+    px: ox + (lng - viewMinLng) * lngScale * scale,
+    py: oy + (viewMaxLat - lat) * latScale * scale, // 北在上
   });
-  const me = toPx(0, 0);
-  // 兩個地點捱得太近時，標籤會疊住睇唔清。呢度做一次輕量去重疊：
-  // 只把捱得太近嘅點沿住原本方向輕輕推開，唔會大改地理位置。
-  const points = raw.map((r) => {
-    const { px, py } = toPx(r.mx, r.my);
-    return { px, py, sp: r.sp };
-  });
-  separateMarkers(points, w, h, pad);
+  const inView = (lat, lng) =>
+    lat >= viewMinLat - 0.004 &&
+    lat <= viewMaxLat + 0.004 &&
+    lng >= viewMinLng - 0.006 &&
+    lng <= viewMaxLng + 0.006;
 
-  const dots = points
-    .map((pt) => spotMarker(pt.px, pt.py, pt.sp, pt.sp.recommended, elidedName(pt.sp.name)))
-    .join('');
-  return `<svg viewBox="0 0 ${w} ${h}">
-    <rect x="0" y="0" width="${w}" height="${h}" fill="${DUO.snow}" rx="12"/>
-    <g stroke="${DUO.swan}" stroke-width="1">
-      ${Array.from({ length: 5 }, (_, i) => `<line x1="0" y1="${((i + 1) * h) / 6}" x2="${w}" y2="${((i + 1) * h) / 6}"/>`).join('')}
-      ${Array.from({ length: 6 }, (_, i) => `<line x1="${((i + 1) * w) / 7}" y1="0" x2="${((i + 1) * w) / 7}" y2="${h}"/>`).join('')}
+  const you = toPx(origin.lat, origin.lng);
+  const seaY = toPx(22.2895, viewMinLng).py; // 維港中線嘅像素高度
+
+  // ---- 背景：海港 + 陸地 + 綠地 ----
+  const bg = `
+    <rect x="0" y="0" width="${w}" height="${h}" fill="#eaf4fb" rx="14"/>
+    <path d="M0 ${seaY} Q ${w * 0.3} ${seaY - 14} ${w * 0.55} ${seaY}
+             Q ${w * 0.8} ${seaY + 14} ${w} ${seaY} L ${w} 0 L 0 0 Z"
+          fill="#a9c98a" opacity="0.35"/>
+    <path d="M0 ${seaY - 30} Q ${w * 0.3} ${seaY - 46} ${w * 0.55} ${seaY - 30}
+             Q ${w * 0.8} ${seaY - 14} ${w} ${seaY - 30} L ${w} 0 L 0 0 Z"
+          fill="#f3f1e6"/>
+    <path d="M0 ${seaY + 30} Q ${w * 0.3} ${seaY + 14} ${w * 0.55} ${seaY + 30}
+             Q ${w * 0.8} ${seaY + 46} ${w} ${seaY + 30} L ${w} ${h} L 0 ${h} Z"
+          fill="#f3f1e6"/>
+    <path d="M0 ${seaY - 22} Q ${w * 0.3} ${seaY - 38} ${w * 0.55} ${seaY - 22}
+             Q ${w * 0.8} ${seaY - 6} ${w} ${seaY - 22} L ${w} ${seaY + 22}
+             Q ${w * 0.8} ${seaY + 38} ${w * 0.55} ${seaY + 22}
+             Q ${w * 0.3} ${seaY + 6} ${0} ${seaY + 22} Z"
+          fill="#bfe6f7"/>
+    <g stroke="#e2ded0" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.9">
+      <path d="M0 ${seaY - 42} Q ${w * 0.35} ${seaY - 56} ${w} ${seaY - 44}"/>
+      <path d="M0 ${seaY + 62} Q ${w * 0.4} ${seaY + 48} ${w} ${seaY + 64}"/>
     </g>
-    <text x="${w - 8}" y="16" text-anchor="end" font-size="10" font-weight="800" fill="${DUO.hare}">N ↑</text>
-    <circle cx="${me.px}" cy="${me.py}" r="7" fill="${DUO.orange}" stroke="#fff" stroke-width="2.5"/>
-    <text x="${me.px}" y="${me.py + 22}" text-anchor="middle" font-size="11" font-weight="800" fill="${DUO.orangeDeep || '#cc7a00'}">你</text>
-    ${dots}
-    <text x="8" y="${h - 6}" font-size="10" font-weight="700" fill="${DUO.hare}">比例忠實 · 網格約 ${Math.round((spanX / 6) / 10) * 10}m</text>
+    <g stroke="#ffffff" stroke-width="1.5" fill="none" opacity="0.7" stroke-linecap="round">
+      <path d="M${w * 0.26} ${seaY + 4} q 7 -5 14 0 q 7 5 14 0"/>
+      <path d="M${w * 0.62} ${seaY + 12} q 7 -5 14 0 q 7 5 14 0"/>
+      <path d="M${w * 0.46} ${seaY - 6} q 6 -4 12 0 q 6 4 12 0"/>
+    </g>`;
+
+  // ---- 地標（真實座標投影）----
+  const landmarks = HK_PLACES.map((p) => {
+    const { px, py } = toPx(p.lat, p.lng);
+    const draw = HK_LANDMARKS[p.kind];
+    return draw ? draw(px, py, p.scale) : '';
+  }).join('');
+
+  // ---- 任務點：圖釘 + 狀態 ----
+  const pins = pinsData
+    .map(({ sp }) => {
+      const { px, py } = toPx(sp.lat, sp.lng);
+      const st = pinState(sp);
+      const fill = st === 'new' ? DUO.green : st === 'done' ? DUO.blue : DUO.hare;
+      const edge = st === 'new' ? DUO.greenDeep : st === 'done' ? '#1899d6' : '#9a9a9a';
+      const icon = st === 'new' ? '★' : st === 'done' ? '✓' : '🔒';
+      return `
+      <g class="pin ${st}" transform="translate(${px.toFixed(1)},${py.toFixed(1)})">
+        ${st === 'new' ? `<circle r="19" fill="none" stroke="${DUO.green}" stroke-width="2.5" class="ping"/>` : ''}
+        <ellipse cx="0" cy="2" rx="6" ry="2.2" fill="rgba(0,0,0,0.14)"/>
+        <path d="M0 0 L-9 -13 Q-11 -25 0 -27 Q11 -25 9 -13 Z" fill="${fill}" stroke="#fff" stroke-width="2"/>
+        <circle cx="0" cy="-17" r="8" fill="#fff" opacity="0.95"/>
+        <text x="0" y="-13.5" text-anchor="middle" font-size="${st === 'locked' ? 8 : 10}" font-weight="800" fill="${edge}">${icon}</text>
+      </g>`;
+    })
+    .join('');
+
+  // ---- 學員位置 ----
+  const youMark = `
+    <g transform="translate(${you.px.toFixed(1)},${you.py.toFixed(1)})">
+      <circle r="17" fill="${DUO.blue}" opacity="0.22"/>
+      <circle r="9" fill="${DUO.blue}" stroke="#fff" stroke-width="2.5"/>
+      <circle r="3.2" fill="#fff"/>
+      <text y="24" text-anchor="middle" font-size="10.5" font-weight="800" fill="${DUO.blueDeep || '#1899d6'}">你</text>
+    </g>`;
+
+  // ---- 地名標籤（用真實座標，所以會跟住地標走）----
+  const labelFor = (lat, lng, text, fill, size = 10.5) => {
+    const { px, py } = toPx(lat, lng);
+    return `<text x="${px.toFixed(1)}" y="${py.toFixed(1)}" text-anchor="middle" font-size="${size}" font-weight="800" fill="${fill}">${text}</text>`;
+  };
+  const labels = `
+    ${labelFor(22.2965, 114.1700, 'Tsim Sha Tsui', '#8a7f6a')}
+    ${labelFor(22.2800, 114.1850, 'Causeway Bay', '#8a7f6a')}
+    ${labelFor(22.2900, 114.1470, 'Central', '#8a7f6a')}
+    ${labelFor(22.2905, 114.1620, 'Victoria Harbour', '#5c93b3', 10)}`;
+
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="任務地圖">
+    ${bg}
+    ${landmarks}
+    ${labels}
+    ${youMark}
+    ${pins}
+    <g transform="translate(${w - 26},24)">
+      <circle r="14" fill="#fff" stroke="${DUO.swan}" stroke-width="2"/>
+      <path d="M0 -8 L3.5 3 L0 1 L-3.5 3 Z" fill="${DUO.red}"/>
+      <text x="0" y="-10" text-anchor="middle" font-size="7" font-weight="800" fill="${DUO.hare}">N</text>
+    </g>
   </svg>`;
 }
 
@@ -1512,6 +1712,7 @@ if ($('btnReset'))
     state.missionPanel = null;
     state.panelQueue = [];
     state.showingPanel = false;
+    state.mapDismissed = false; // 重置要連「已收起」標記一齊清，否則下次唔會再彈地圖
     await api.reset();
     state.server = await api.state();
     if ($('timeline')) {

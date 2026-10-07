@@ -1078,10 +1078,10 @@ h1, h2, h3, h4 {
 
 .map-legend {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
   margin: 9px 0 8px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 800;
   color: var(--duo-wolf);
 }
@@ -1090,6 +1090,54 @@ h1, h2, h3, h4 {
 .map-legend .dot.you { background: var(--duo-orange); }
 .map-legend .dot.rec { background: var(--duo-green); }
 .map-legend .dot.other { background: var(--duo-hare); }
+
+/* 圖例用嘅小圖釘（對應地圖上三種狀態） */
+.map-legend .pin-dot {
+  width: 13px;
+  height: 15px;
+  display: inline-block;
+  border-radius: 50% 50% 50% 50% / 62% 62% 40% 40%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.12);
+  flex: none;
+}
+.map-legend .pin-dot.done { background: var(--duo-blue); }
+.map-legend .pin-dot.new { background: var(--duo-green); }
+.map-legend .pin-dot.locked { background: var(--duo-hare); }
+.map-legend .pin-dot.you { background: var(--duo-blue); border-radius: 50%; width: 12px; height: 12px; }
+
+/* 地圖控制項（右上指南針、右側加減） */
+.map-controls {
+  position: absolute;
+  right: 10px;
+  top: 74px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.map-controls button {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--duo-swan);
+  background: #fff;
+  color: var(--duo-wolf);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 0 var(--duo-swan-deep);
+}
+.map-controls button:active { transform: translateY(2px); box-shadow: none; }
+
+/* 圖釘脈動（對應 .spot-marker 嘅舊寫法） */
+.pin.new .ping {
+  animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  transform-origin: center;
+}
+
 
 /* 附近其他地點列表 */
 .spot-row {
