@@ -186,24 +186,39 @@ node scripts/smoke-live.mjs       # 直連 DeepSeek，驗證 6 場景 + 失敗�
 ### 產生演示網址嘅 QR code
 
 ```bash
-node scripts/make-qr.mjs https://你嘅網址.onrender.com 你嘅示範密碼
+node scripts/make-qr.mjs https://你嘅網址.onrender.com 你嘅示範密碼   # 基本版
+node scripts/make-qr-card.mjs https://你嘅網址.onrender.com          # 品牌卡片版
+node scripts/verify-qr.mjs demo-qr.png https://你嘅網址.onrender.com  # 解碼驗證
 ```
 
-會產生三個檔案：`demo-qr.png`（淨網址）、`demo-qr-login.png`（網址 + 密碼，掃碼即入）、
-`demo-qr.svg`（向量版，放大印刷唔會矇）。
+| 產出 | 用途 |
+|---|---|
+| `demo-qr.png` | 純黑白 QR，最好掃。適合貼喺簡報最後一頁 |
+| `demo-qr.svg` | 向量版，放大印刷唔會矇 |
+| `demo-qr-card.png` | Duolingo 風格卡片（綠色標題帶 + 網址 + SCAN TO START），適合放入 PPT |
 
 **「掃碼即入」點運作**：QR 內容係 `網址/#pwd=密碼`。用 hash 而唔用 query string 係刻意嘅 ——
 hash 唔會送去伺服器、唔會出現喺 access log；登入頁讀到之後會自動填入密碼框，
 並且即時用 `history.replaceState` 清走 hash，唔會留喺瀏覽器歷史或網址欄。
 評委掃碼之後只需要撳一下「開始示範」。
 
-> ⚠ `demo-qr-login.png` 等同把密碼公開，所以已經加入 `.gitignore`，
+#### 點解卡片版嘅 QR 保持黑白，唔跟品牌用綠色
+
+試過用 Owl Green 畫 QR 模組，但**實測掃唔到** —— 綠色嘅亮度對比唔夠，
+嚴格嘅解碼器無法二值化。另外中間放圖案（即使只用 3×3 模組、遠低於 H 級 30% 容錯上限）
+亦會令解碼失敗，因為被遮嘅位元組本身無法恢復。
+
+所以最終設計係：**QR 本體一啲都唔改（純黑白），品牌風格放喺外框**。
+`make-qr-card.mjs` 產生之後會**由成品 PNG 直接解碼驗證**，確認掃得到才寫檔。
+呢個係刻意嘅：與其相信「H 級容錯應該夠」，不如實測。
+
+> ⚠ `demo-qr-login.png` 等同把密碼公開，所以 QR 圖檔已加入 `.gitignore`，
 > 唔會俾你誤推上 GitHub。只喺課室／組員之間分享。
 
-> 呢個工具需要 `qrcode` 模組，但**本專案刻意零 npm 依賴**，
+> 呢啲工具需要 `qrcode` / `jsqr` / `pngjs`，但**本專案刻意零 npm 依賴**，
 > 所以要裝喺一個獨立目錄（同樣已加入 `.gitignore`）：
 > ```bash
-> mkdir _qrtool && cd _qrtool && npm install qrcode --prefix .
+> mkdir _qrtool && cd _qrtool && npm install qrcode jsqr pngjs --prefix .
 > ```
 
 ### 點解同時有 smoke-flow 同 smoke-app-flow
