@@ -60,6 +60,7 @@ const state = {
   // 任務地圖同任務卡係同一次 lesson-complete 出嘅兩個視圖，要留住俾用戶來回睇
   nearbySpots: null,
   missionPanel: null,
+  techOpen: false, // 技術面板抽屜：預設收起，正式演示唔會見到
 };
 
 /* ---------------------------------------------------------------- *
@@ -923,6 +924,20 @@ function updateChrome() {
   if (state.usage) $('usagePill') && ($('usagePill').textContent = `tokens ${state.usage}`);
   else if ($('usagePill')) $('usagePill').textContent = 'tokens 0';
   if ($('latencyPill')) $('latencyPill').textContent = state.elapsed ? `${state.elapsed} ms` : '— ms';
+
+  // 頂欄嗰個不顯眼嘅小點：綠=真實模型、黃=離線引擎。唔顯示 tokens 之類嘅技術數字。
+  const dot = $('modeDot');
+  const dotText = $('modeDotText');
+  if (dot && dotText) {
+    const isLive = shownMode === 'live' || shownMode === 'auto';
+    dot.classList.toggle('live', isLive);
+    dot.classList.toggle('mock', !isLive);
+    dotText.textContent = isLive ? '真實模型' : '離線模式';
+    dot.title = isLive
+      ? `真實模型（${s?.provider?.model || 'deepseek'}）：每個場景即時生成文案`
+      : '離線確定性引擎：同一套工具同判定，文案由模板生成（零成本）';
+  }
+
   if (!s) return;
   if ($('kMode')) $('kMode').textContent = shownMode === s.mode ? s.mode : `${s.mode} → ${shownMode}`;
   if ($('kProvider')) {
@@ -945,6 +960,24 @@ function updateChrome() {
   if ($('kTools')) $('kTools').textContent = s.tool_calls ?? state.toolCalls;
   if ($('kCode')) $('kCode').textContent = s.has_code ? '已簽發（有效期內）' : state.lastCode ? '已核銷／過期' : '未簽發';
   if ($('kVerified')) $('kVerified').textContent = s.completed ? '通過 ✅' : state.panel?.type === 'arrival' ? '進行中' : '未開始';
+}
+
+/* ---------------------------------------------------------------- *
+ * 技術面板抽屜（預設收起，正式演示完全唔會見到）
+ * ---------------------------------------------------------------- */
+function setTechOpen(open) {
+  const drawer = $('techDrawer');
+  const scrim = $('techScrim');
+  if (!drawer) return;
+  drawer.classList.toggle('open', open);
+  drawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+  if (scrim) scrim.hidden = !open;
+  state.techOpen = open;
+  if (open) renderSide();
+}
+
+function toggleTech() {
+  setTechOpen(!state.techOpen);
 }
 
 function renderSide() {
@@ -1342,6 +1375,8 @@ if ($('btnReset'))
     state.lastCode = null;
     state.geo = null;
     state.gpsScenario = 'arrived';
+    state.nearbySpots = null;
+    state.missionPanel = null;
     await api.reset();
     state.server = await api.state();
     if ($('timeline')) {
@@ -1353,6 +1388,12 @@ if ($('btnReset'))
     renderChromeStats();
     paintFlow();
   });
+
+/* 技術面板：撳 ⚙、撳狀態小點、按 T 都可以開關；Esc 收起 */
+if ($('btnTech')) $('btnTech').addEventListener('click', toggleTech);
+if ($('btnTechClose')) $('btnTechClose').addEventListener('click', () => setTechOpen(false));
+if ($('modeDot')) $('modeDot').addEventListener('click', toggleTech);
+if ($('techScrim')) $('techScrim').addEventListener('click', () => setTechOpen(false));
 
 if ($('btnAutoPlay'))
   $('btnAutoPlay').addEventListener('click', async () => {
@@ -1386,6 +1427,9 @@ document.addEventListener('keydown', (e) => {
     $('mainAction')?.click();
   }
   if (e.key === 'r' || e.key === 'R') $('btnReset')?.click();
+  // T = 開關技術面板（Q&A 時才用），Esc = 收起
+  if (e.key === 't' || e.key === 'T') toggleTech();
+  if (e.key === 'Escape' && state.techOpen) setTechOpen(false);
 });
 
 function paintFlow() {
@@ -1417,6 +1461,8 @@ const esc = (s) =>
   if ($('brandOwl')) $('brandOwl').innerHTML = owlSvg(34, 'wave');
   renderScreen();
   renderAction();
+  // 技術抽屜預設收起：正式演示時畫面上只有手機
+  setTechOpen(false);
   try {
     state.server = await api.state();
     state.mode = state.server.mode;

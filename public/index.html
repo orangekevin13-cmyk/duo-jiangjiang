@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <!-- ============ 頂部：Duolingo 風格導覽列 ============ -->
+    <!-- ============ 頂部：Duolingo 風格導覽列（只留品牌 + 一個小狀態點） ============ -->
     <header class="topbar">
       <div class="brand">
         <div class="brand-mark" id="brandOwl" aria-hidden="true"></div>
@@ -17,33 +17,19 @@
         </div>
       </div>
 
-      <ol class="flow" id="flow">
-        <li data-step="1"><i>1</i><span>Lesson Complete</span></li>
-        <li data-step="2"><i>2</i><span>Mission Revealed</span></li>
-        <li data-step="3"><i>3</i><span>Rehearsal</span></li>
-        <li data-step="4"><i>4</i><span>Verify</span></li>
-        <li data-step="5"><i>5</i><span>Reward</span></li>
-        <li data-step="6"><i>6</i><span>Share &amp; Next</span></li>
-      </ol>
-
       <div class="controls">
-        <div class="seg" id="modeSeg" title="live=真實模型；mock=離線確定性引擎；auto=有 Key 走 live，失敗自動降級">
-          <button data-mode="auto" class="active">auto</button>
-          <button data-mode="live">live</button>
-          <button data-mode="mock">mock</button>
-        </div>
-        <div class="seg" id="speedSeg" title="時間線播放速度">
-          <button data-speed="instant">瞬間</button>
-          <button data-speed="fast" class="active">快</button>
-          <button data-speed="slow">慢</button>
-        </div>
-        <button class="btn ghost" id="btnAutoPlay" title="自動跑完 6 個場景（演示彩排用）">▶ 自動演示</button>
+        <!-- 運行模式：一個不顯眼嘅小點（綠=真實模型、灰=離線）。撳一下開技術面板 -->
+        <button class="mode-dot" id="modeDot" title="運行狀態" aria-label="運行狀態">
+          <i id="modeDotLight"></i><span id="modeDotText">連線中</span>
+        </button>
+        <button class="btn ghost" id="btnAutoPlay" title="自動跑完 6 個場景（彩排／錄屏用）">▶ 自動演示</button>
         <button class="btn ghost" id="btnReset">重置</button>
+        <button class="btn ghost" id="btnTech" title="顯示技術面板（快捷鍵 T）">⚙</button>
       </div>
     </header>
 
-    <main class="stage">
-      <!-- ============ 左：學員手機（Duolingo App） ============ -->
+    <main class="stage stage-solo">
+      <!-- ============ 學員手機（Duolingo App）—— 畫面唯一主角 ============ -->
       <section class="phone-wrap">
         <div class="phone">
           <div class="phone-notch"></div>
@@ -65,6 +51,17 @@
               <span class="stat hearts" id="statHearts" title="心心（Hearts）">❤️ 4</span>
             </div>
           </div>
+
+          <!-- 學習路徑式進度條（原本喺頂部嘅流程指示，搬入 App 內更似真嘅 Duolingo） -->
+          <ol class="app-flow" id="flow">
+            <li data-step="1" title="Lesson Complete"><i></i><span>Lesson</span></li>
+            <li data-step="2" title="Mission Revealed"><i></i><span>Mission</span></li>
+            <li data-step="3" title="Rehearsal"><i></i><span>Rehearsal</span></li>
+            <li data-step="4" title="Verify"><i></i><span>Verify</span></li>
+            <li data-step="5" title="Reward"><i></i><span>Reward</span></li>
+            <li data-step="6" title="Share &amp; Next"><i></i><span>Share</span></li>
+          </ol>
+
           <div class="goalbar" title="每日目標（Daily Goal）">
             <i id="goalFill" style="width: 100%"></i>
             <span id="goalText">今日 60 / 50 XP · 已達標 ✅</span>
@@ -80,13 +77,24 @@
             <span data-tab="league">聯盟</span>
           </div>
         </div>
-        <p class="phone-caption">學員端：課後頁 / 任務卡 / 預演 / 到店驗證 / City Stamp / 分享卡</p>
       </section>
+    </main>
 
-      <!-- ============ 中：Agent 推理時間線 ============ -->
-      <section class="timeline-wrap">
+    <!-- ============ 技術面板抽屜（預設收起，撳 ⚙ 或按 T 打開） ============ -->
+    <div class="tech-scrim" id="techScrim" hidden></div>
+    <aside class="tech-drawer" id="techDrawer" aria-hidden="true">
+      <div class="tech-head">
+        <h2>技術面板 · Technical</h2>
+        <button class="btn ghost" id="btnTechClose">收起 ✕</button>
+      </div>
+      <p class="tech-note">
+        呢啲係評委追問時用嘅證據：Agent 每一步嘅工具調用、入參返回值、結構化輸出校驗同降級路徑。
+        正式演示時可以完全唔開。
+      </p>
+
+      <div class="tech-body">
         <div class="panel-head">
-          <h2>Agent 推理時間線</h2>
+          <h3>Agent 推理時間線</h3>
           <div class="panel-head-right">
             <span class="pill" id="modePill">auto</span>
             <span class="pill" id="usagePill">tokens 0</span>
@@ -103,56 +111,73 @@
             </p>
           </div>
         </div>
-      </section>
 
-      <!-- ============ 右：狀態 / 地圖 / 數據 ============ -->
-      <aside class="side">
-        <div class="card">
-          <h3>模型連接</h3>
-          <dl class="kv">
-            <dt>模式</dt><dd id="kMode">auto</dd>
-            <dt>Provider</dt><dd id="kProvider">檢測中…</dd>
-            <dt>模型</dt><dd id="kModel">deepseek-flash</dd>
-            <dt>Endpoint</dt><dd id="kBase">—</dd>
-          </dl>
-          <p class="hint" id="kHint"></p>
-        </div>
+        <div class="tech-grid">
+          <div class="card">
+            <h3>模型連接</h3>
+            <dl class="kv">
+              <dt>模式</dt><dd id="kMode">auto</dd>
+              <dt>Provider</dt><dd id="kProvider">檢測中…</dd>
+              <dt>模型</dt><dd id="kModel">deepseek-flash</dd>
+              <dt>Endpoint</dt><dd id="kBase">—</dd>
+            </dl>
+            <p class="hint" id="kHint"></p>
+          </div>
 
-        <div class="card">
-          <h3>位置與圍欄</h3>
-          <svg id="map" viewBox="0 0 420 250" preserveAspectRatio="xMidYMid meet" aria-label="到店校驗可視化"></svg>
-          <p class="hint" id="mapHint">圍欄半徑 120m · 撳開場景 3 之後顯示學員／門店相對位置</p>
-        </div>
+          <div class="card">
+            <h3>位置與圍欄</h3>
+            <svg id="map" viewBox="0 0 420 250" preserveAspectRatio="xMidYMid meet" aria-label="到店校驗可視化"></svg>
+            <p class="hint" id="mapHint">圍欄半徑 120m · 場景 4 之後顯示學員／門店相對位置</p>
+          </div>
 
-        <div class="card">
-          <h3>運行指標</h3>
-          <dl class="kv">
-            <dt>任務數</dt><dd id="kMissions">0</dd>
-            <dt>工具調用</dt><dd id="kTools">0</dd>
-            <dt>動態碼</dt><dd id="kCode">未簽發</dd>
-            <dt>雙重驗證</dt><dd id="kVerified">未開始</dd>
-          </dl>
-        </div>
+          <div class="card">
+            <h3>運行指標</h3>
+            <dl class="kv">
+              <dt>任務數</dt><dd id="kMissions">0</dd>
+              <dt>工具調用</dt><dd id="kTools">0</dd>
+              <dt>動態碼</dt><dd id="kCode">未簽發</dd>
+              <dt>雙重驗證</dt><dd id="kVerified">未開始</dd>
+            </dl>
+          </div>
 
-        <div class="card brand-card">
-          <h3>品牌定位（講稿要點）</h3>
-          <ul class="bullets">
-            <li><b>唔係第三方 App</b>：Duo 講講 係 Duolingo 粵語課程嘅自然延伸，用返同一套 streak / XP / Gems / 排行榜 / 成就徽章。</li>
-            <li><b>Duolingo has gamified learning. Duo 講講 gamifies using.</b></li>
-            <li><b>Same Duolingo. Same game. New city.</b></li>
-          </ul>
-        </div>
+          <div class="card">
+            <h3>演示控制</h3>
+            <div class="tech-controls">
+              <span class="ctrl-label">模型來源</span>
+              <div class="seg seg-dark" id="modeSeg" title="live=真實模型；mock=離線確定性引擎；auto=有 Key 走 live，失敗自動降級">
+                <button data-mode="auto" class="active">auto</button>
+                <button data-mode="live">live</button>
+                <button data-mode="mock">mock</button>
+              </div>
+              <span class="ctrl-label">時間線速度</span>
+              <div class="seg seg-dark" id="speedSeg" title="時間線播放速度">
+                <button data-speed="instant">瞬間</button>
+                <button data-speed="fast" class="active">快</button>
+                <button data-speed="slow">慢</button>
+              </div>
+            </div>
+          </div>
 
-        <div class="card">
-          <h3>評委可能追問嘅 3 個點</h3>
-          <ul class="bullets">
-            <li><b>唔係靠模型判斷「到咗未」</b>：圍欄距離、碼值、時效、一次性全部由工具函數判定，模型只負責解釋同安撫。</li>
-            <li><b>失敗咗會點</b>：切到「仲喺路上 / 定位飄移 / 模擬定位」三種 fixture，睇 Agent 點俾補救建議同風控標記。</li>
-            <li><b>模型掛咗點算</b>：切 mock 模式，同一套工具、同一套 UI，零 API 都可以完整演示。</li>
-          </ul>
+          <div class="card brand-card">
+            <h3>品牌定位（講稿要點）</h3>
+            <ul class="bullets">
+              <li><b>唔係第三方 App</b>：Duo 講講 係 Duolingo 粵語課程嘅自然延伸，用返同一套 streak / XP / Gems / 排行榜 / 成就徽章。</li>
+              <li><b>Duolingo has gamified learning. Duo 講講 gamifies using.</b></li>
+              <li><b>Same Duolingo. Same game. New city.</b></li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3>評委可能追問嘅 3 個點</h3>
+            <ul class="bullets">
+              <li><b>唔係靠模型判斷「到咗未」</b>：圍欄距離、碼值、時效、一次性全部由工具函數判定，模型只負責解釋同安撫。</li>
+              <li><b>失敗咗會點</b>：切到「仲喺路上 / 定位飄移 / 模擬定位」三種 fixture，睇 Agent 點俾補救建議同風控標記。</li>
+              <li><b>模型掛咗點算</b>：切 mock 模式，同一套工具、同一套 UI，零 API 都可以完整演示。</li>
+            </ul>
+          </div>
         </div>
-      </aside>
-    </main>
+      </div>
+    </aside>
 
     <script type="module" src="./app.js"></script>
   </body>
